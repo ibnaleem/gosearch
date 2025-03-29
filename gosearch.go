@@ -14,8 +14,8 @@ import (
 	"net/http"
 	"crypto/tls"
 	"sync/atomic"
+	"encoding/json"
 
-	"github.com/bytedance/sonic"
 	"github.com/ibnaleem/gobreach"
 	"github.com/inancgumus/screen"
 )
@@ -144,7 +144,7 @@ func UnmarshalJSON() (Data, error) {
 	}
 
 	var data Data
-	err = sonic.Unmarshal(jsonData, &data)
+	err = json.Unmarshal(jsonData, &data)
 	if err != nil {
 		return Data{}, fmt.Errorf("error unmarshalling JSON: %w", err)
 	}
@@ -190,7 +190,7 @@ func HudsonRock(username string, wg *sync.WaitGroup) {
 	}
 
 	var response HudsonRockResponse
-	err = sonic.Unmarshal(body, &response)
+	err = json.Unmarshal(body, &response)
 	if err != nil {
 		fmt.Println("Error parsing JSON in HudsonRock function:", err)
 		return
@@ -396,7 +396,7 @@ func SearchProxyNova(username string, wg *sync.WaitGroup) {
 	}
 
 	var response ProxyNova
-	err = sonic.Unmarshal(body, &response)
+	err = json.Unmarshal(body, &response)
 	if err != nil {
 		fmt.Println("Error parsing JSON in SearchProxyNova function:", err)
 		return
@@ -493,7 +493,7 @@ func CrackHash(hash string) string {
 	}
 
 	var weakpass WeakpassResponse
-	err = sonic.Unmarshal(jsonData, &weakpass)
+	err = json.Unmarshal(jsonData, &weakpass)
 	if err != nil {
 		fmt.Printf("Error unmarshalling JSON: %v\n", err)
 		return ""
