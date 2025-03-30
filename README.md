@@ -21,8 +21,11 @@
 
 ## Installation & Usage
 ```
-$ go install github.com/ibnaleem/gosearch@latest
+$ git clone -b 32-bit https://github.com/ibnaleem/gosearch
+$ cd gosearch
+$ go build
 ```
+This will manually build the `gosearch` binary. Simply move this to your bin directory.
 ### Unix:
 ```
 $ gosearch [username]
