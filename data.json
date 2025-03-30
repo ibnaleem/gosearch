@@ -1919,6 +1919,13 @@
       "base_url": "https://modrinth.com/user/{}",
       "follow_redirects": true,
       "errorType": "status_code"
+    },
+    {
+      "name": "Fortnite.gg",
+      "base_url": "https://fortnite.gg/creative?creator={}",
+      "follow_redirects": true,
+      "errorType": "errorMsg",
+      "errorMsg": "No public maps found"
     }
     ]
 }
