@@ -1,20 +1,23 @@
 package main
 
 import (
-	"io"
-	"os"
+	"compress/gzip"
+	"compress/zlib"
+	"crypto/tls"
+	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
-	"flag"
-	"sync"
-	"time"
-	"strings"
-	"strconv"
 	"net/http"
-	"crypto/tls"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
 	"sync/atomic"
+	"time"
 
+	"github.com/andybalholm/brotli"
 	"github.com/bytedance/sonic"
 	"github.com/ibnaleem/gobreach"
 	"github.com/inancgumus/screen"
@@ -48,20 +51,20 @@ const DefaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Ge
 const VERSION = "v1.0.0"
 
 var tlsConfig = &tls.Config{
-    MinVersion: tls.VersionTLS12,
-    CipherSuites: []uint16{
-        tls.TLS_AES_128_GCM_SHA256,
-        tls.TLS_AES_256_GCM_SHA384,
-        tls.TLS_CHACHA20_POLY1305_SHA256,
-        tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-        tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-        tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-        tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-        tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-        tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-    },
-    CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256, tls.CurveP384},
-    NextProtos: []string{"http/1.1"},
+	MinVersion: tls.VersionTLS12,
+	CipherSuites: []uint16{
+		tls.TLS_AES_128_GCM_SHA256,
+		tls.TLS_AES_256_GCM_SHA384,
+		tls.TLS_CHACHA20_POLY1305_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+	},
+	CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256, tls.CurveP384},
+	NextProtos:       []string{"http/1.1"},
 }
 
 var count atomic.Uint32
@@ -114,7 +117,7 @@ type WeakpassResponse struct {
 }
 
 type ProxyNova struct {
-	Count int `json:"count"`
+	Count int      `json:"count"`
 	Lines []string `json:"lines"`
 }
 
@@ -386,22 +389,22 @@ func SearchProxyNova(username string, wg *sync.WaitGroup) {
 
 	defer wg.Done()
 
-  fmt.Println(Yellow + "[*] Searching " + username + " on ProxyNova for any compromised passwords..." + Reset)
+	fmt.Println(Yellow + "[*] Searching " + username + " on ProxyNova for any compromised passwords..." + Reset)
 
-  client := &http.Client{}
+	client := &http.Client{}
 
-  req, err := http.NewRequest(http.MethodGet, "https://api.proxynova.com/comb?query="+username, nil)
-  if err!= nil {
-    fmt.Printf("Error creating request: %v\n", err)
-    return
-  }
+	req, err := http.NewRequest(http.MethodGet, "https://api.proxynova.com/comb?query="+username, nil)
+	if err != nil {
+		fmt.Printf("Error creating request: %v\n", err)
+		return
+	}
 
-  resp, err := client.Do(req)
-  if err!= nil {
-    fmt.Printf("Error sending request: %v\n", err)
-    return
-  }
-  defer resp.Body.Close()
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("Error sending request: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -420,19 +423,19 @@ func SearchProxyNova(username string, wg *sync.WaitGroup) {
 		fmt.Printf(Green+"[+] Found %d compromised passwords for %s:\n", response.Count, username+Reset)
 		for _, element := range response.Lines {
 			parts := strings.Split(element, ":")
-	
+
 			if len(parts) == 2 {
-					email := parts[0]
-					password := parts[1]
-	
-					fmt.Printf(Green + "::    Email: %s\n", email + Reset)
-					fmt.Printf(Green + "::    Password: %s\n\n", password + Reset)
-	
-					WriteToFile(username, "[+] Email: "+email+"\n"+"[+] Password: "+password+"\n\n")
+				email := parts[0]
+				password := parts[1]
+
+				fmt.Printf(Green+"::    Email: %s\n", email+Reset)
+				fmt.Printf(Green+"::    Password: %s\n\n", password+Reset)
+
+				WriteToFile(username, "[+] Email: "+email+"\n"+"[+] Password: "+password+"\n\n")
 			}
-		}	
-		} else {
-			fmt.Println(Red+"[-] No compromised passwords found for " + username + "." + Reset)
+		}
+	} else {
+		fmt.Println(Red + "[-] No compromised passwords found for " + username + "." + Reset)
 	}
 }
 
@@ -516,7 +519,7 @@ func CrackHash(hash string) string {
 }
 
 func MakeRequestWithResponseURL(website Website, url string, username string) {
-	
+
 	// Some websites always return a 200 for existing and non-existing profiles.
 	// If we do not follow redirects, we could get a 301 for existing profiles and 302 for non-existing profiles.
 	// That is why we have the follow_redirects in our website struct.
@@ -527,21 +530,21 @@ func MakeRequestWithResponseURL(website Website, url string, username string) {
 	// If the response url is not pointing to where the profile should be, then the profile does not exist.
 
 	client := &http.Client{
-    Timeout: 120 * time.Second,
-    Transport: &http.Transport {
-        TLSClientConfig: tlsConfig,
-        Proxy: http.ProxyFromEnvironment,
-        DialContext: (&net.Dialer{
-            Timeout:   30 * time.Second,
-            KeepAlive: 30 * time.Second,
-            DualStack: true,
-        }).DialContext,
-        MaxIdleConns:          100,
-        IdleConnTimeout:       90 * time.Second,
-        TLSHandshakeTimeout:   10 * time.Second,
-        ExpectContinueTimeout: 1 * time.Second,
-    	},
-    	Jar: nil,
+		Timeout: 120 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+			Proxy:           http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+		Jar: nil,
 	}
 
 	if !website.FollowRedirects {
@@ -604,25 +607,24 @@ func MakeRequestWithResponseURL(website Website, url string, username string) {
 	}
 }
 
-
 func MakeRequestWithErrorCode(website Website, url string, username string) {
 
 	client := &http.Client{
-    Timeout: 120 * time.Second,
-    Transport: &http.Transport {
-        TLSClientConfig: tlsConfig,
-        Proxy: http.ProxyFromEnvironment,
-        DialContext: (&net.Dialer{
-            Timeout:   30 * time.Second,
-            KeepAlive: 30 * time.Second,
-            DualStack: true,
-        }).DialContext,
-        MaxIdleConns:          100,
-        IdleConnTimeout:       90 * time.Second,
-        TLSHandshakeTimeout:   10 * time.Second,
-        ExpectContinueTimeout: 1 * time.Second,
-    	},
-    	Jar: nil,
+		Timeout: 120 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+			Proxy:           http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+		Jar: nil,
 	}
 
 	if !website.FollowRedirects {
@@ -674,7 +676,6 @@ func MakeRequestWithErrorCode(website Website, url string, username string) {
 		return
 	}
 
-
 	if res.StatusCode != website.ErrorCode {
 		url = BuildURL(website.BaseURL, username)
 		fmt.Println(Green+"[+]", website.Name+":", url+Reset)
@@ -686,21 +687,21 @@ func MakeRequestWithErrorCode(website Website, url string, username string) {
 func MakeRequestWithErrorMsg(website Website, url string, username string) {
 
 	client := &http.Client{
-    Timeout: 120 * time.Second,
-    Transport: &http.Transport {
-        TLSClientConfig: tlsConfig,
-        Proxy: http.ProxyFromEnvironment,
-        DialContext: (&net.Dialer{
-            Timeout:   30 * time.Second,
-            KeepAlive: 30 * time.Second,
-            DualStack: true,
-        }).DialContext,
-        MaxIdleConns:          100,
-        IdleConnTimeout:       90 * time.Second,
-        TLSHandshakeTimeout:   10 * time.Second,
-        ExpectContinueTimeout: 1 * time.Second,
-    	},
-    	Jar: nil,
+		Timeout: 120 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+			Proxy:           http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+		Jar: nil,
 	}
 
 	if !website.FollowRedirects {
@@ -746,13 +747,27 @@ func MakeRequestWithErrorMsg(website Website, url string, username string) {
 	if err != nil {
 		return
 	}
+
+	var reader io.ReadCloser
+
+	switch res.Header.Get("Content-Encoding") {
+	case "gzip":
+		reader, err = gzip.NewReader(res.Body)
+	case "deflate":
+		reader, err = zlib.NewReader(res.Body)
+	case "br":
+		reader = io.NopCloser(brotli.NewReader(res.Body))
+	default:
+		reader = res.Body
+	}
+
 	defer res.Body.Close()
 
 	if res.StatusCode >= 400 {
 		return
 	}
 
-	body, err := io.ReadAll(res.Body)
+	body, err := io.ReadAll(reader)
 	if err != nil {
 		fmt.Printf("Error reading response body: %v\n", err)
 		return
@@ -774,21 +789,21 @@ func MakeRequestWithProfilePresence(website Website, url string, username string
 	// If a profile indicator is not found, we can assume that the profile does not exist.
 
 	client := &http.Client{
-    Timeout: 120 * time.Second,
-    Transport: &http.Transport {
-        TLSClientConfig: tlsConfig,
-        Proxy: http.ProxyFromEnvironment,
-        DialContext: (&net.Dialer{
-            Timeout:   30 * time.Second,
-            KeepAlive: 30 * time.Second,
-            DualStack: true,
-        }).DialContext,
-        MaxIdleConns:          100,
-        IdleConnTimeout:       90 * time.Second,
-        TLSHandshakeTimeout:   10 * time.Second,
-        ExpectContinueTimeout: 1 * time.Second,
-    	},
-    	Jar: nil,
+		Timeout: 120 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+			Proxy:           http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+		Jar: nil,
 	}
 
 	if !website.FollowRedirects {
@@ -935,7 +950,7 @@ func main() {
 	fmt.Println(strings.Repeat("⎯", 85))
 	fmt.Println(":: Username                              : ", username)
 	fmt.Println(":: Websites                              : ", len(data.Websites))
-	
+
 	// if the false positive flag is true, then specify that false positives are not shown
 	if *noFalsePositivesFlag {
 		fmt.Println(":: No False Positives                    : ", *noFalsePositivesFlag)
