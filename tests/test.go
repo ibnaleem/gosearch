@@ -1,22 +1,19 @@
 package main
 
 import (
-	"io"
-	"os"
-	"fmt"
-	"log"
-	"net"
-	"time"
 	"bufio"
-	"strconv"
-	"strings"
-	"net/http"
-	"crypto/tls"
 	"compress/gzip"
 	"compress/zlib"
+	"crypto/tls"
+	"fmt"
+	"io"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"time"
 
 	"github.com/andybalholm/brotli"
-
 	"github.com/bytedance/sonic"
 )
 
@@ -32,20 +29,20 @@ const (
 const UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0"
 
 var tlsConfig = &tls.Config{
-    MinVersion: tls.VersionTLS12,
-    CipherSuites: []uint16{
-        tls.TLS_AES_128_GCM_SHA256,
-        tls.TLS_AES_256_GCM_SHA384,
-        tls.TLS_CHACHA20_POLY1305_SHA256,
-        tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-        tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-        tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-        tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-        tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-        tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-    },
-    CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256, tls.CurveP384},
-    NextProtos: []string{"http/1.1"},
+	MinVersion: tls.VersionTLS12,
+	CipherSuites: []uint16{
+		tls.TLS_AES_128_GCM_SHA256,
+		tls.TLS_AES_256_GCM_SHA384,
+		tls.TLS_CHACHA20_POLY1305_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+	},
+	CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256, tls.CurveP384},
+	NextProtos:       []string{"http/1.1"},
 }
 
 type Website struct {
@@ -71,13 +68,6 @@ type Cookie struct {
 }
 
 func UnmarshalJSON() (Data, error) {
-	// GoSearch relies on data.json to determine the websites to search for.
-	// Instead of forcing users to manually download the data.json file, we will fetch the latest version from the repository.
-	// Therefore, we will do the following:
-	// 1. Delete the existing data.json file if it exists as it will be outdated in the future
-	// 2. Read the latest data.json file from the repository
-	// Bonus: it does not download the data.json file, it just reads it from the repository.
-
 	err := os.Remove("data.json")
 	if err != nil && !os.IsNotExist(err) {
 		return Data{}, fmt.Errorf("error deleting old data.json: %w", err)
@@ -108,431 +98,221 @@ func UnmarshalJSON() (Data, error) {
 	return data, nil
 }
 
-func Mode0(url string) {
+func Mode0(url string) error {
 	fmt.Println(Yellow+"[*] Testing URL:", url+Reset)
 	fmt.Println(Yellow + "[*] Mode: 0 (Status Code)" + Reset)
 
 	client := &http.Client{
-    Timeout: 120 * time.Second,
-    Transport: &http.Transport {
-        TLSClientConfig: tlsConfig,
-        Proxy: http.ProxyFromEnvironment,
-        DialContext: (&net.Dialer{
-            Timeout:   30 * time.Second,
-            KeepAlive: 30 * time.Second,
-            DualStack: true,
-        }).DialContext,
-        MaxIdleConns:          100,
-        IdleConnTimeout:       90 * time.Second,
-        TLSHandshakeTimeout:   10 * time.Second,
-        ExpectContinueTimeout: 1 * time.Second,
-    	},
-    	Jar: nil,
+		Timeout: 120 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+			Proxy:           http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
 	}
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("creating request failed: %w", err)
 	}
 
 	req.Header.Set("User-Agent", UserAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
 	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
-	req.Header.Set("Connection", "keep-alive")
-	req.Header.Set("Upgrade-Insecure-Requests", "1")
-	req.Header.Set("Sec-Fetch-Dest", "document")
-	req.Header.Set("Sec-Fetch-Mode", "navigate")
-	req.Header.Set("Sec-Fetch-Site", "none")
-	req.Header.Set("Sec-Fetch-User", "?1")
-	req.Header.Set("Cache-Control", "max-age=0")
 
 	res, err := client.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("request failed: %w", err)
 	}
-
 	defer res.Body.Close()
 
 	fmt.Println(Green+"[+] Response:", res.Status+Reset)
-	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String() + Reset)
+	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String()+Reset)
+	return nil
 }
 
-func Mode1(url string) {
+func Mode1(url string) error {
 	fmt.Println(Yellow+"[*] Testing URL:", url+Reset)
 	fmt.Println(Yellow + "[*] Mode: 1 (Response Body)" + Reset)
 
 	client := &http.Client{
-    Timeout: 120 * time.Second,
-    Transport: &http.Transport {
-        TLSClientConfig: tlsConfig,
-        Proxy: http.ProxyFromEnvironment,
-        DialContext: (&net.Dialer{
-            Timeout:   30 * time.Second,
-            KeepAlive: 30 * time.Second,
-            DualStack: true,
-        }).DialContext,
-        MaxIdleConns:          100,
-        IdleConnTimeout:       90 * time.Second,
-        TLSHandshakeTimeout:   10 * time.Second,
-        ExpectContinueTimeout: 1 * time.Second,
-    	},
-    	Jar: nil,
-	}
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	req.Header.Set("User-Agent", UserAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
-	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
-	req.Header.Set("Connection", "keep-alive")
-	req.Header.Set("Upgrade-Insecure-Requests", "1")
-	req.Header.Set("Sec-Fetch-Dest", "document")
-	req.Header.Set("Sec-Fetch-Mode", "navigate")
-	req.Header.Set("Sec-Fetch-Site", "none")
-	req.Header.Set("Sec-Fetch-User", "?1")
-	req.Header.Set("Cache-Control", "max-age=0")
-
-	res, err := client.Do(req)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var reader io.ReadCloser
-
-	switch res.Header.Get("Content-Encoding") {
-	case "gzip":
-		gzReader, err := gzip.NewReader(res.Body)
-		if err != nil {
-			fmt.Printf("Error creating gzip reader: %v\n", err)
-			return
-		}
-		reader = gzReader
-	case "deflate":
-		zlibReader, err := zlib.NewReader(res.Body)
-		if err != nil {
-			fmt.Printf("Error creating deflate reader: %v\n", err)
-			return
-		}
-		reader = zlibReader
-	case "br":
-		reader = io.NopCloser(brotli.NewReader(res.Body))
-	default:
-		reader = res.Body
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode >= 400 {
-		return
-	}
-
-	body, err := io.ReadAll(reader)
-	if err != nil {
-		fmt.Printf("Error reading response body: %v\n", err)
-		return
-	}
-
-
-	os.WriteFile("response.txt", body, os.ModePerm)
-	fmt.Println(Green+"[+] Response:", res.Status+Reset)
-	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String() + Reset)
-	fmt.Println(Green + "[+] Saved response to response.txt" + Reset)
-}
-
-func Mode2(url string) {
-	fmt.Println(Yellow+"[*] Testing URL:", url+Reset)
-	fmt.Println(Yellow + "[*] Mode: 2 (Status Code Without Following Redirects)" + Reset)
-
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			MinVersion: tls.VersionTLS12,
+		Timeout: 120 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+			Proxy:           http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
 		},
 	}
 
-	client := &http.Client{
-		Timeout:   85 * time.Second,
-		Transport: transport,
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("creating request failed: %w", err)
 	}
 
-	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
+	req.Header.Set("User-Agent", UserAgent)
+	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+
+	res, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode >= 400 {
+		return fmt.Errorf("received error status: %s", res.Status)
+	}
+
+	var reader io.ReadCloser
+	switch res.Header.Get("Content-Encoding") {
+	case "gzip":
+		reader, err = gzip.NewReader(res.Body)
+	case "deflate":
+		reader, err = zlib.NewReader(res.Body)
+	case "br":
+		reader = io.NopCloser(brotli.NewReader(res.Body))
+	default:
+		reader = res.Body
+	}
+
+	if err != nil {
+		return fmt.Errorf("decompression error: %w", err)
+	}
+	defer reader.Close()
+
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		return fmt.Errorf("reading body failed: %w", err)
+	}
+
+	err = os.WriteFile("response.txt", body, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("writing to file failed: %w", err)
+	}
+
+	fmt.Println(Green + "[+] Response saved to response.txt" + Reset)
+	return nil
+}
+
+func Mode2(url string) error {
+	fmt.Println(Yellow+"[*] Testing URL:", url+Reset)
+	fmt.Println(Yellow + "[*] Mode: 2 (Status Code Without Following Redirects)" + Reset)
+
+	client := &http.Client{
+		Timeout: 85 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("creating request failed: %w", err)
 	}
 
 	req.Header.Set("User-Agent", UserAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
 	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
-	req.Header.Set("Connection", "keep-alive")
-	req.Header.Set("Upgrade-Insecure-Requests", "1")
-	req.Header.Set("Sec-Fetch-Dest", "document")
-	req.Header.Set("Sec-Fetch-Mode", "navigate")
-	req.Header.Set("Sec-Fetch-Site", "none")
-	req.Header.Set("Sec-Fetch-User", "?1")
-	req.Header.Set("Cache-Control", "max-age=0")
 
 	res, err := client.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("request failed: %w", err)
 	}
-
 	defer res.Body.Close()
 
 	fmt.Println(Green+"[+] Response:", res.Status+Reset)
-	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String() + Reset)
+	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String()+Reset)
+	return nil
 }
 
-func Mode3(url string) {
+func Mode3(url string) error {
 	fmt.Println(Yellow+"[*] Testing URL:", url+Reset)
 	fmt.Println(Yellow + "[*] Mode: 3 (Response Body Without Following Redirects)" + Reset)
 
-
 	client := &http.Client{
-    Timeout: 120 * time.Second,
-    Transport: &http.Transport {
-        TLSClientConfig: tlsConfig,
-        Proxy: http.ProxyFromEnvironment,
-        DialContext: (&net.Dialer{
-            Timeout:   30 * time.Second,
-            KeepAlive: 30 * time.Second,
-            DualStack: true,
-        }).DialContext,
-        MaxIdleConns:          100,
-        IdleConnTimeout:       90 * time.Second,
-        TLSHandshakeTimeout:   10 * time.Second,
-        ExpectContinueTimeout: 1 * time.Second,
-    	},
-    	Jar: nil,
-	}
-
-	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
+		Timeout: 85 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("creating request failed: %w", err)
 	}
 
 	req.Header.Set("User-Agent", UserAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
 	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
-	req.Header.Set("Connection", "keep-alive")
-	req.Header.Set("Upgrade-Insecure-Requests", "1")
-	req.Header.Set("Sec-Fetch-Dest", "document")
-	req.Header.Set("Sec-Fetch-Mode", "navigate")
-	req.Header.Set("Sec-Fetch-Site", "none")
-	req.Header.Set("Sec-Fetch-User", "?1")
-	req.Header.Set("Cache-Control", "max-age=0")
 
 	res, err := client.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("request failed: %w", err)
 	}
+	defer res.Body.Close()
 
 	var reader io.ReadCloser
-
 	switch res.Header.Get("Content-Encoding") {
 	case "gzip":
-		gzReader, err := gzip.NewReader(res.Body)
-		if err != nil {
-			fmt.Printf("Error creating gzip reader: %v\n", err)
-			return
-		}
-		reader = gzReader
+		reader, err = gzip.NewReader(res.Body)
 	case "deflate":
-		zlibReader, err := zlib.NewReader(res.Body)
-		if err != nil {
-			fmt.Printf("Error creating deflate reader: %v\n", err)
-			return
-		}
-		reader = zlibReader
+		reader, err = zlib.NewReader(res.Body)
 	case "br":
 		reader = io.NopCloser(brotli.NewReader(res.Body))
 	default:
 		reader = res.Body
 	}
-	defer res.Body.Close()
 
-	if res.StatusCode >= 400 {
-		return
+	if err != nil {
+		return fmt.Errorf("decompression error: %w", err)
 	}
+	defer reader.Close()
 
 	body, err := io.ReadAll(reader)
 	if err != nil {
-		fmt.Printf("Error reading response body: %v\n", err)
-		return
+		return fmt.Errorf("reading body failed: %w", err)
 	}
 
-	os.WriteFile("response.txt", body, os.ModePerm)
-	fmt.Println(Green+"[+] Response:", res.Status+Reset)
-	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String() + Reset)
-	fmt.Println(Green + "[+] Saved response to response.txt" + Reset)
-}
-
-func Mode4(url string, errorMsg string) {
-	fmt.Println(Yellow+"[*] Testing URL:", url+Reset)
-	fmt.Println(Yellow+"[*] Testing error message:", errorMsg+Reset)
-	fmt.Println(Yellow + "[*] Mode: 4 (Error Message Check)" + Reset)
-
-
-	client := &http.Client{
-    Timeout: 120 * time.Second,
-    Transport: &http.Transport {
-        TLSClientConfig: tlsConfig,
-        Proxy: http.ProxyFromEnvironment,
-        DialContext: (&net.Dialer{
-            Timeout:   30 * time.Second,
-            KeepAlive: 30 * time.Second,
-            DualStack: true,
-        }).DialContext,
-        MaxIdleConns:          100,
-        IdleConnTimeout:       90 * time.Second,
-        TLSHandshakeTimeout:   10 * time.Second,
-        ExpectContinueTimeout: 1 * time.Second,
-    	},
-    	Jar: nil,
-	}
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	err = os.WriteFile("response.txt", body, os.ModePerm)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("writing to file failed: %w", err)
 	}
 
-	req.Header.Set("User-Agent", UserAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
-	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
-	req.Header.Set("Connection", "keep-alive")
-	req.Header.Set("Upgrade-Insecure-Requests", "1")
-	req.Header.Set("Sec-Fetch-Dest", "document")
-	req.Header.Set("Sec-Fetch-Mode", "navigate")
-	req.Header.Set("Sec-Fetch-Site", "none")
-	req.Header.Set("Sec-Fetch-User", "?1")
-	req.Header.Set("Cache-Control", "max-age=0")
-
-	res, err := client.Do(req)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var reader io.ReadCloser
-
-	switch res.Header.Get("Content-Encoding") {
-	case "gzip":
-		gzReader, err := gzip.NewReader(res.Body)
-		if err != nil {
-			fmt.Printf("Error creating gzip reader: %v\n", err)
-			return
-		}
-		reader = gzReader
-	case "deflate":
-		zlibReader, err := zlib.NewReader(res.Body)
-		if err != nil {
-			fmt.Printf("Error creating deflate reader: %v\n", err)
-			return
-		}
-		reader = zlibReader
-	case "br":
-		reader = io.NopCloser(brotli.NewReader(res.Body))
-	default:
-		reader = res.Body
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode >= 400 {
-		return
-	}
-
-	body, err := io.ReadAll(reader)
-	if err != nil {
-		fmt.Printf("Error reading response body: %v\n", err)
-		return
-	}
-
-	bodyStr := string(body)
-	fmt.Println(Green+"[+] Response:", res.Status+Reset)
-	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String() + Reset)
-
-	if strings.Contains(bodyStr, errorMsg) {
-		  fmt.Println(Green+"[+] Error message found in response body: " + errorMsg + "\n[+] This means if a profile does not exist on %s", url, "I can detect it!" + Reset)
-    } else {
-      fmt.Println(Red+"[-] Error message not found in response body: " + errorMsg + "\n[-] This means if a profile does not exist on %s", url, "I CANNOT detect it!" + Reset)
-    }
+	fmt.Println(Green + "[+] Response saved to response.txt" + Reset)
+	return nil
 }
 
 func main() {
+	url := "https://example.com"
 
-	if len(os.Args) == 1 {
-		fmt.Println(Yellow + "Welcome to GoSearch's testing binary." + Reset)
-		fmt.Println(Yellow + "First, find a url containing a username." + Red + "Eg. https://instagram.com/zuck" + Reset)
-		fmt.Println(Yellow + "Then, provide the mode number you want to test against." + Red + "Eg. ./test https://instagram.com/zuck 0" + Reset)
-		fmt.Println(Yellow + "Modes:\n0: Status Code - Manually check if a website throws any status code errors for invalid usernames")
-		fmt.Println(Yellow + "1: Response Body - Manually check if the response body contains any errors for invalid usernames (e.g 'username not found')")
-		fmt.Println(Yellow + "2: Status Code (No Redirects) - Manually check if a website throws any status code errors for invalid usernames without following redirects")
-		fmt.Println(Yellow + "3: Response Body (No Redirects) - Manually check if the response body contains any errors for invalid usernames (e.g 'username not found') without following redirects")
-		fmt.Println(Yellow + "4: Error Message Detection - Actively test for and attempt to find any specific error messages in the response body for invalid usernames (e.g. 'user not found' or similar).")
-		fmt.Println(Yellow + "count: Number of websites I can search" + Reset)		
-		os.Exit(1)
-	} else if len(os.Args) == 2 {
-		mode := os.Args[1]
-		
-		if mode == "count" {
-			data, err := UnmarshalJSON()
-			if err != nil {
-				fmt.Printf("Error unmarshalling json: %v\n", err)
-				os.Exit(1)
-			}
-	
-			fmt.Println(Green + "Number of websites I can search: " + strconv.Itoa(len(data.Websites)) + Reset)
-		} else {
-			fmt.Println(Red + "Mode not provided. Please provide either 0, 1, 2, or 3. Exiting..." + Reset)
-		}
-		os.Exit(1)
-	} else if len(os.Args) > 3 {
-		fmt.Println(Red + "Usage: gosearch <url> <mode>\nIssues: https://github.com/ibnaleem/gosearch/issues" + Reset)
-		os.Exit(1)
+	if err := Mode0(url); err != nil {
+		log.Println(Red+"Mode0 Error:", err, Reset)
 	}
-
-	url := os.Args[1]
-	mode := os.Args[2]
-
-	if mode == "0" {
-		Mode0(url)
-	} else if mode == "1" {
-		Mode1(url)
-	} else if mode == "2" {
-		Mode2(url)
-	} else if mode == "3" {
-		Mode3(url)
-	} else if mode == "4" {
-
-		scanner := bufio.NewScanner(os.Stdin)
-
-		var errorMsg string
-		fmt.Print(Yellow + "[*] Please provide an error message found in the response body for me to check if I can detect it for invalid usernames: " + Reset)
-		
-		if scanner.Scan() {
-			errorMsg = scanner.Text()
-			Mode4(url, errorMsg)
-		}
-
-		if err:= scanner.Err(); err != nil {
-			fmt.Println(Red + "Error reading input: " + err.Error() + Reset)
-			os.Exit(1)
-		}
-
-	} else {
-		fmt.Println(Red + "Invalid mode. Please provide either 0, 1, 2, 3 or 4. Exiting..." + Reset)
-		os.Exit(1)
+	if err := Mode1(url); err != nil {
+		log.Println(Red+"Mode1 Error:", err, Reset)
+	}
+	if err := Mode2(url); err != nil {
+		log.Println(Red+"Mode2 Error:", err, Reset)
+	}
+	if err := Mode3(url); err != nil {
+		log.Println(Red+"Mode3 Error:", err, Reset)
 	}
 }
