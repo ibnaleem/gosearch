@@ -27,3 +27,8 @@ go.work.sum
 .env
 
 .DS_Store
+
+
+# development folders
+lab
+tmp
