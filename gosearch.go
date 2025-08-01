@@ -9,17 +9,19 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/olekukonko/tablewriter/renderer"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/olekukonko/tablewriter/renderer"
 
 	"github.com/andybalholm/brotli"
 	"github.com/bytedance/sonic"
@@ -76,6 +78,9 @@ var (
 
 	// file mutext
 	mu sync.Mutex
+
+	// outputDir is the directory where output files are saved.
+	outputDir string = "." // Default output directory is the current directory
 )
 
 // Theme defines color codes for terminal output styling.
@@ -228,6 +233,8 @@ func main() {
 	noFalsePositivesFlag := flag.Bool("no-false-positives", false, "Do not show false positives")
 	breachDirectoryAPIKey := flag.String("b", "", "Search Breach Directory with an API Key")
 	breachDirectoryAPIKeyLong := flag.String("breach-directory", "", "Search Breach Directory with an API Key")
+	outputFlag := flag.String("o", "", "Directory to save the output files (default: current directory)")
+	outputFlagLong := flag.String("output", "", "Directory to save the output files (default: current directory)")
 
 	// Parse command-line flags
 	flag.Parse()
@@ -238,16 +245,20 @@ func main() {
 	} else if *usernameFlagLong != "" {
 		username = *usernameFlagLong
 	} else {
-		if len(os.Args) > 1 {
-			username = os.Args[1]
-		} else {
-			fmt.Println("Usage: gosearch -u <username>\nIssues: https://github.com/ibnaleem/gosearch/issues")
-			os.Exit(1)
-		}
+		fmt.Println("Usage: gosearch -u <username>\nIssues: https://github.com/ibnaleem/gosearch/issues")
+		os.Exit(1)
+	}
+
+	if *outputFlag != "" {
+		outputDir = *outputFlag
+	} else if *outputFlagLong != "" {
+		outputDir = *outputFlagLong
+	} else {
+		outputDir = "."
 	}
 
 	// Delete any existing output file for the username
-	DeleteOldFile(username)
+	// DeleteOldFile(username)
 	// Initialize a wait group for concurrent operations
 	var wg sync.WaitGroup
 
@@ -406,11 +417,22 @@ func WriteToFile(username string, content string) {
 	mu.Lock()
 	defer mu.Unlock()
 
+	if _, err := os.Stat(outputDir); err != nil {
+		if os.IsNotExist(err) {
+			// Create output directory if it doesn't exist
+			if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
+				log.Fatal("Error creating output directory:", err)
+			}
+		} else {
+			log.Fatal("Error checking output directory:", err)
+		}
+	}
+
 	// Construct filename
-	filename := fmt.Sprintf("%s.txt", username)
+	filePath := filepath.Join(outputDir, fmt.Sprintf("%s_%s.txt", username, time.Now().Format("2006-01-02")))
 
 	// Open file in append mode, create if it doesn't exist
-	f, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, os.ModePerm)
+	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, os.ModePerm)
 	if err != nil {
 		log.Fatal(err)
 	}

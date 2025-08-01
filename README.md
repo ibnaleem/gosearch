@@ -34,11 +34,11 @@ $ go install github.com/ibnaleem/gosearch@latest
 ```
 ### Unix:
 ```
-$ gosearch [username]
+$ gosearch -u [username]
 ```
 ### Windows
 ```
-C:\Users\Bob> gosearch.exe [username]
+C:\Users\Bob> gosearch.exe -u [username]
 ```
 ## Use Cases
 Ideally, it is best practice to run GoSearch with the `--no-false-positives` flag:
