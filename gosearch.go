@@ -1,5 +1,6 @@
-// Package main contains the implementation of GoSearch, a tool for searching usernames across various websites
-// and checking for compromised credentials.
+// Created by github.com/ibnaleem & contributors
+// Contribute & support: github.com/ibnaleem/gosearch
+
 package main
 
 import (
