@@ -699,7 +699,7 @@ func CrackHash(hash string) string {
 	}
 
 	req.Header.Set("User-Agent", DefaultUserAgent)
-	req.Header.Set("accept:", "application/json")
+	req.Header.Set("Accept", "application/json")
 
 	res, err := client.Do(req)
 	if err != nil {
