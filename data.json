@@ -11,8 +11,10 @@
     {
       "name": "Twitter/X",
       "base_url": "https://twitter.com/{}",
+      "url_probe": "https://syndication.twitter.com/srv/timeline-profile/screen-name/{}",
       "follow_redirects": true,
-      "errorType": "unknown"
+      "errorType": "errorMsg",
+      "errorMsg": "\"hasResults\":false"
     },
     {
       "name": "GitHub",
