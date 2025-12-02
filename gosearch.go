@@ -316,6 +316,8 @@ func main() {
 	wg.Wait()
 
 	// Search Breach Directory if API key is provided (flag or env var)
+	breachFlagUsed := *breachDirectoryAPIKey != "" || *breachDirectoryAPIKeyLong != ""
+
 	if *breachDirectoryAPIKey != "" {
 		apikey = *breachDirectoryAPIKey
 	} else if *breachDirectoryAPIKeyLong != "" {
@@ -325,7 +327,10 @@ func main() {
 		apikey = os.Getenv("BREACH_DIRECTORY_API_KEY")
 	}
 
-	if apikey != "" {
+	// Check if API key is valid (not empty or placeholder)
+	isValidKey := apikey != "" && apikey != "your_api_key_here"
+
+	if isValidKey {
 		fmt.Println()
 		fmt.Println()
 
@@ -334,6 +339,12 @@ func main() {
 		wg.Add(1)
 		go SearchBreachDirectory(username, apikey, &wg)
 		wg.Wait()
+	} else if breachFlagUsed || os.Getenv("BREACH_DIRECTORY_API_KEY") != "" {
+		// User tried to use -b flag or has env var set but key is invalid
+		fmt.Println()
+		Yellow("[!] BreachDirectory search skipped: No valid API key found.").Println()
+		Yellow("    Add your API key to .env file: BREACH_DIRECTORY_API_KEY=your_key").Println()
+		Yellow("    Get a key at: https://rapidapi.com/rohan-patra/api/breachdirectory").Println()
 	}
 
 	fmt.Println()
