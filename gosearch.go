@@ -386,6 +386,10 @@ func main() {
 }
 
 // loadEnvFile loads environment variables from a .env file if it exists.
+//
+// It parses KEY=VALUE pairs, supports # comments, handles quoted values,
+// and skips setting variables that are already defined in the environment.
+// Returns silently if the .env file doesn't exist or can't be read.
 func loadEnvFile() {
 	// Try to read .env file from current directory
 	data, err := os.ReadFile(".env")
