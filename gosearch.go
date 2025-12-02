@@ -394,8 +394,9 @@ func loadEnvFile() {
 		return
 	}
 
-	// Parse each line
-	lines := strings.Split(string(data), "\n")
+	// Normalize line endings and parse each line
+	content := strings.ReplaceAll(string(data), "\r\n", "\n")
+	lines := strings.Split(content, "\n")
 	for _, line := range lines {
 		// Skip empty lines and comments
 		line = strings.TrimSpace(line)
