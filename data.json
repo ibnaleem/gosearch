@@ -2,11 +2,10 @@
   "websites": [
     {
       "name": "Instagram",
-      "base_url": "https://instagram.com/{}",
-      "url_probe": "https://imginn.com/{}",
+      "base_url": "https://www.instagram.com/{}",
       "follow_redirects": true,
       "errorType": "errorMsg",
-      "errorMsg":"<title>Page Not Found - imginn.com</title>"
+      "errorMsg": "<title>Instagram</title>"
     },
     {
       "name": "Twitter/X",
