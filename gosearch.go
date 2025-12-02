@@ -412,8 +412,8 @@ func loadEnvFile() {
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
 
-		// Remove quotes if present
-		if len(value) >= 2 && ((value[0] == '"' && value[len(value)-1] == '"') || (value[0] == '\'' && value[len(value)-1] == '\'')) {
+		// Remove surrounding quotes if present (matching pairs only)
+		if len(value) >= 2 && (value[0] == value[len(value)-1]) && (value[0] == '"' || value[0] == '\'') {
 			value = value[1 : len(value)-1]
 		}
 
