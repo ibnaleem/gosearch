@@ -223,6 +223,9 @@ func (c Color) Fprintln(w io.Writer) {
 
 // main is the entry point of the program, handling command-line arguments and orchestrating searches.
 func main() {
+	// Load environment variables from .env file if it exists
+	loadEnvFile()
+
 	// Variables to store username and API key
 	var username string
 	var apikey string
@@ -312,14 +315,17 @@ func main() {
 	go HudsonRock(username, &wg)
 	wg.Wait()
 
-	// Search Breach Directory if API key is provided
-	if *breachDirectoryAPIKey != "" || *breachDirectoryAPIKeyLong != "" {
-		if *breachDirectoryAPIKey != "" {
-			apikey = *breachDirectoryAPIKey
-		} else {
-			apikey = *breachDirectoryAPIKeyLong
-		}
+	// Search Breach Directory if API key is provided (flag or env var)
+	if *breachDirectoryAPIKey != "" {
+		apikey = *breachDirectoryAPIKey
+	} else if *breachDirectoryAPIKeyLong != "" {
+		apikey = *breachDirectoryAPIKeyLong
+	} else {
+		// Check environment variable as fallback
+		apikey = os.Getenv("BREACH_DIRECTORY_API_KEY")
+	}
 
+	if apikey != "" {
 		fmt.Println()
 		fmt.Println()
 
@@ -366,6 +372,45 @@ func main() {
 
 	WriteToFile(username, ":: Number of profiles found              : "+strconv.Itoa(int(count.Load())))
 	WriteToFile(username, ":: Total time taken                      : "+elapsed.String())
+}
+
+// loadEnvFile loads environment variables from a .env file if it exists.
+func loadEnvFile() {
+	// Try to read .env file from current directory
+	data, err := os.ReadFile(".env")
+	if err != nil {
+		// .env file doesn't exist or can't be read, that's fine
+		return
+	}
+
+	// Parse each line
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		// Skip empty lines and comments
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Split on first = sign
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		// Remove quotes if present
+		if len(value) >= 2 && ((value[0] == '"' && value[len(value)-1] == '"') || (value[0] == '\'' && value[len(value)-1] == '\'')) {
+			value = value[1 : len(value)-1]
+		}
+
+		// Set environment variable (don't override if already set)
+		if os.Getenv(key) == "" {
+			os.Setenv(key, value)
+		}
+	}
 }
 
 // UnmarshalJSON fetches and parses the website configuration from a remote JSON file.
