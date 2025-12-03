@@ -25,9 +25,10 @@
     {
       "name": "Reddit",
       "base_url": "https://www.reddit.com/user/{}",
+      "url_probe": "https://www.reddit.com/user/{}/about.json",
       "follow_redirects": true,
       "errorType": "errorMsg",
-      "errorMsg": "<title>Reddit - Dive into anything</title>"
+      "errorMsg": "\"error\": 404"
     },
     {
       "name": "Facebook",
@@ -129,49 +130,57 @@
       "name": "Mastodon Social",
       "base_url": "https://mastodon.social/@{}",
       "follow_redirects": true,
-      "errorType": "status_code"
+      "errorType": "errorMsg",
+      "errorMsg": "<title>Mastodon</title>"
     },
     {
       "name": "MSTDN Social",
       "base_url": "https://mstdn.social/@{}",
       "follow_redirects": true,
-      "errorType": "status_code"
+      "errorType": "errorMsg",
+      "errorMsg": "<title>mstdn.social</title>"
     },
     {
       "name": "Mas.to",
       "base_url": "https://mas.to/@{}",
       "follow_redirects": true,
-      "errorType": "status_code"
+      "errorType": "errorMsg",
+      "errorMsg": "<title>mas.to</title>"
     },
     {
       "name": "Mastodon World",
       "base_url": "https://mastodon.world/@{}",
       "follow_redirects": true,
-      "errorType": "status_code"
+      "errorType": "errorMsg",
+      "errorMsg": "<title>Mastodon World</title>"
     },
     {
       "name": "Fosstodon",
       "base_url": "https://fosstodon.org/@{}",
       "follow_redirects": true,
-      "errorType": "status_code"
+      "errorType": "errorMsg",
+      "errorMsg": "<title>Fosstodon</title>"
     },
     {
       "name": "Hachyderm",
       "base_url": "https://hachyderm.io/@{}",
       "follow_redirects": true,
-      "errorType": "status_code"
+      "errorType": "errorMsg",
+      "errorMsg": "<title>Hachyderm.io</title>"
     },
     {
       "name": "Vivaldi Social",
       "base_url": "https://social.vivaldi.net/@{}",
       "follow_redirects": true,
-      "errorType": "status_code"
+      "errorType": "errorMsg",
+      "errorMsg": "<title>Vivaldi Social</title>"
     },
     {
       "name": "Techhub Social",
       "base_url": "https://techhub.social/@{}",
       "follow_redirects": true,
-      "errorType": "status_code"
+      "errorType": "errorMsg",
+      "errorMsg": "<title>techhub.social</title>"
     },
     {
       "name": "Wakatime",
@@ -487,8 +496,7 @@
       "name": "Telegram",
       "base_url": "https://t.me/{}",
       "follow_redirects": true,
-      "errorType": "errorMsg",
-      "errorMsg": "If you have <strong>Telegram</strong>, you can contact"
+      "errorType": "response_url"
     },
     {
       "name": "LastFM",
@@ -705,7 +713,7 @@
       "name": "Strava",
       "base_url": "https://www.strava.com/athletes/{}",
       "follow_redirects": true,
-      "errorType": "status_code"
+      "errorType": "response_url"
     },
     {
       "name": "Bugcrowd",
@@ -772,7 +780,8 @@
       "name": "Chaos",
       "base_url": "https://chaos.social/@{}",
       "follow_redirects": true,
-      "errorType": "status_code"
+      "errorType": "errorMsg",
+      "errorMsg": "<title>chaos.social</title>"
     },
     {
       "name": "Chatujme.cz",
@@ -996,7 +1005,8 @@
       "name": "Flightradar24",
       "base_url": "https://my.flightradar24.com/{}",
       "follow_redirects": true,
-      "errorType": "status_code"
+      "errorType": "errorMsg",
+      "errorMsg": "<header class=\"header landing"
     },
     {
       "name": "Flipboard",
@@ -1254,7 +1264,7 @@
       "name": "Quizlet",
       "base_url": "https://quizlet.com/user/{}/sets",
       "follow_redirects": true,
-      "errorType": "status_code"
+      "errorType": "unknown"
     },
     {
       "name": "PyPi",
@@ -1338,7 +1348,8 @@
       "base_url": "https://www.kaskus.co.id/@{}",
       "url_probe": "https://www.kaskus.co.id/api/users?username={}",
       "follow_redirects": true,
-      "errorType": "status_code"
+      "errorType": "errorMsg",
+      "errorMsg": "Target user not found"
     },
     {
       "name": "Kick",
