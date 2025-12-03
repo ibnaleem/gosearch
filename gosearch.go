@@ -193,6 +193,86 @@ type ProxyNova struct {
 	Lines []string `json:"lines"` // List of credential pairs
 }
 
+// HIBPBreach represents a breach from Have I Been Pwned API.
+type HIBPBreach struct {
+	Name         string `json:"Name"`         // Breach name
+	Title        string `json:"Title"`        // Breach title
+	Domain       string `json:"Domain"`       // Affected domain
+	BreachDate   string `json:"BreachDate"`   // Date of breach
+	PwnCount     int    `json:"PwnCount"`     // Number of accounts affected
+	Description  string `json:"Description"`  // Breach description
+	DataClasses  []string `json:"DataClasses"` // Types of data exposed
+	IsVerified   bool   `json:"IsVerified"`   // Whether breach is verified
+	IsSensitive  bool   `json:"IsSensitive"`  // Whether breach contains sensitive data
+}
+
+// LeakCheckResponse represents response from LeakCheck API.
+type LeakCheckResponse struct {
+	Success bool              `json:"success"` // Whether request succeeded
+	Found   int               `json:"found"`   // Number of results found
+	Result  []LeakCheckResult `json:"result"`  // List of leak results
+}
+
+// LeakCheckResult represents a single leak result.
+type LeakCheckResult struct {
+	Email    string   `json:"email"`    // Leaked email
+	Username string   `json:"username"` // Leaked username
+	Password string   `json:"password"` // Leaked password (if available)
+	Sources  []string `json:"sources"`  // Leak sources
+}
+
+// DeHashedResponse represents response from DeHashed API.
+type DeHashedResponse struct {
+	Balance int              `json:"balance"` // API credits remaining
+	Took    string           `json:"took"`    // Query time
+	Total   int              `json:"total"`   // Total results
+	Entries []DeHashedEntry  `json:"entries"` // List of entries
+}
+
+// DeHashedEntry represents a single DeHashed result.
+type DeHashedEntry struct {
+	ID           string `json:"id"`            // Entry ID
+	Email        string `json:"email"`         // Email address
+	Username     string `json:"username"`      // Username
+	Password     string `json:"password"`      // Password (plaintext if available)
+	HashedPassword string `json:"hashed_password"` // Hashed password
+	Database     string `json:"database_name"` // Source database
+}
+
+// IntelXResponse represents response from Intelligence X API.
+type IntelXResponse struct {
+	ID      string        `json:"id"`      // Search ID
+	Status  int           `json:"status"`  // Search status
+	Records []IntelXRecord `json:"records"` // Search results
+}
+
+// IntelXRecord represents a single Intelligence X result.
+type IntelXRecord struct {
+	SystemID   string `json:"systemid"`   // System ID
+	Name       string `json:"name"`       // Result name
+	Date       string `json:"date"`       // Date found
+	Bucket     string `json:"bucket"`     // Source bucket
+	Type       int    `json:"type"`       // Result type
+	MediaType  int    `json:"mediah"`     // Media type
+}
+
+// GitHubCodeSearchResponse represents GitHub code search API response.
+type GitHubCodeSearchResponse struct {
+	TotalCount int                   `json:"total_count"` // Total results
+	Items      []GitHubCodeSearchItem `json:"items"`       // Search results
+}
+
+// GitHubCodeSearchItem represents a single code search result.
+type GitHubCodeSearchItem struct {
+	Name       string `json:"name"`       // File name
+	Path       string `json:"path"`       // File path
+	HTMLURL    string `json:"html_url"`   // URL to view file
+	Repository struct {
+		FullName string `json:"full_name"` // Repo owner/name
+		HTMLURL  string `json:"html_url"`  // Repo URL
+	} `json:"repository"`
+}
+
 // Color represents a colored string for terminal output.
 type Color string
 
@@ -233,6 +313,11 @@ func main() {
 	noFalsePositivesFlag := flag.Bool("no-false-positives", false, "Do not show false positives")
 	breachDirectoryAPIKey := flag.String("b", "", "Search Breach Directory with an API Key")
 	breachDirectoryAPIKeyLong := flag.String("breach-directory", "", "Search Breach Directory with an API Key")
+	hibpAPIKey := flag.String("hibp", "", "Search Have I Been Pwned with an API Key")
+	leakcheckAPIKey := flag.String("leakcheck", "", "Search LeakCheck.io with an API Key")
+	dehashedAPIKey := flag.String("dehashed", "", "Search DeHashed with API credentials (email:api_key)")
+	intelxAPIKey := flag.String("intelx", "", "Search Intelligence X with an API Key")
+	githubToken := flag.String("github-token", "", "GitHub token for code search (searches for leaked credentials in repos)")
 	outputFlag := flag.String("o", "", "Directory to save the output files (default: current directory)")
 	outputFlagLong := flag.String("output", "", "Directory to save the output files (default: current directory)")
 
@@ -327,6 +412,51 @@ func main() {
 		//strings.Repeat("⎯", 85)
 		wg.Add(1)
 		go SearchBreachDirectory(username, apikey, &wg)
+		wg.Wait()
+	}
+
+	// Search Have I Been Pwned if API key is provided
+	if *hibpAPIKey != "" {
+		fmt.Println()
+		fmt.Println()
+		wg.Add(1)
+		go SearchHIBP(username, *hibpAPIKey, &wg)
+		wg.Wait()
+	}
+
+	// Search LeakCheck if API key is provided
+	if *leakcheckAPIKey != "" {
+		fmt.Println()
+		fmt.Println()
+		wg.Add(1)
+		go SearchLeakCheck(username, *leakcheckAPIKey, &wg)
+		wg.Wait()
+	}
+
+	// Search DeHashed if API credentials are provided
+	if *dehashedAPIKey != "" {
+		fmt.Println()
+		fmt.Println()
+		wg.Add(1)
+		go SearchDeHashed(username, *dehashedAPIKey, &wg)
+		wg.Wait()
+	}
+
+	// Search Intelligence X if API key is provided
+	if *intelxAPIKey != "" {
+		fmt.Println()
+		fmt.Println()
+		wg.Add(1)
+		go SearchIntelX(username, *intelxAPIKey, &wg)
+		wg.Wait()
+	}
+
+	// Search GitHub for leaked credentials if token is provided
+	if *githubToken != "" {
+		fmt.Println()
+		fmt.Println()
+		wg.Add(1)
+		go SearchGitHubCode(username, *githubToken, &wg)
 		wg.Wait()
 	}
 
@@ -793,6 +923,506 @@ func SearchBreachDirectory(username string, apikey string, wg *sync.WaitGroup) {
 		Green("[+] Source:", entry.Sources).Println()
 		Green("[+] SHA1:", entry.Sha1)
 		WriteToFile(username, "[+] Source: "+entry.Sources)
+	}
+}
+
+// SearchHIBP searches Have I Been Pwned for breaches associated with an email/username.
+func SearchHIBP(username string, apikey string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	Yellow("[*] Searching ", username, " on Have I Been Pwned...").Println()
+	WriteToFile(username, strings.Repeat("⎯", 85))
+	WriteToFile(username, "[*] Have I Been Pwned Results:")
+
+	// Initialize HTTP client
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// Construct API URL - HIBP can search by email or username
+	url := fmt.Sprintf("https://haveibeenpwned.com/api/v3/breachedaccount/%s?truncateResponse=false", username)
+
+	// Create request
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		Redf("[-] Error creating HIBP request: %v", err).Println()
+		return
+	}
+
+	// Set required headers
+	req.Header.Set("User-Agent", "GoSearch-OSINT")
+	req.Header.Set("hibp-api-key", apikey)
+
+	// Send request
+	resp, err := client.Do(req)
+	if err != nil {
+		Redf("[-] Error querying HIBP: %v", err).Println()
+		return
+	}
+	defer resp.Body.Close()
+
+	// Handle rate limiting
+	if resp.StatusCode == 429 {
+		Yellow("[!] HIBP rate limited. Try again later.").Println()
+		return
+	}
+
+	// Handle not found
+	if resp.StatusCode == 404 {
+		Green("[+] Good news! ", username, " was not found in any breaches on HIBP.").Println()
+		WriteToFile(username, "[+] No breaches found on Have I Been Pwned")
+		return
+	}
+
+	// Handle unauthorized
+	if resp.StatusCode == 401 {
+		Redf("[-] Invalid HIBP API key. Get one at: https://haveibeenpwned.com/API/Key").Println()
+		return
+	}
+
+	if resp.StatusCode != 200 {
+		Redf("[-] HIBP returned status: %d", resp.StatusCode).Println()
+		return
+	}
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		Redf("[-] Error reading HIBP response: %v", err).Println()
+		return
+	}
+
+	// Parse breaches
+	var breaches []HIBPBreach
+	err = sonic.Unmarshal(body, &breaches)
+	if err != nil {
+		Redf("[-] Error parsing HIBP response: %v", err).Println()
+		return
+	}
+
+	// Display results
+	Greenf("[+] Found %d breaches on Have I Been Pwned:\n", len(breaches)).Println()
+	WriteToFile(username, fmt.Sprintf("[+] Found %d breaches on HIBP", len(breaches)))
+
+	table := tablewriter.NewTable(os.Stdout)
+	table.Header("No", "Breach", "Date", "Data Exposed")
+
+	for i, breach := range breaches {
+		dataTypes := strings.Join(breach.DataClasses, ", ")
+		table.Append(i+1, Red(breach.Title), Yellow(breach.BreachDate), Cyan(dataTypes))
+		WriteToFile(username, fmt.Sprintf("[+] Breach: %s | Date: %s | Data: %s", breach.Title, breach.BreachDate, dataTypes))
+	}
+
+	if err := table.Render(); err != nil {
+		log.Printf("table render failed: %v", err)
+	}
+}
+
+// SearchLeakCheck searches LeakCheck.io for leaked credentials.
+func SearchLeakCheck(username string, apikey string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	Yellow("[*] Searching ", username, " on LeakCheck.io...").Println()
+	WriteToFile(username, strings.Repeat("⎯", 85))
+	WriteToFile(username, "[*] LeakCheck.io Results:")
+
+	// Initialize HTTP client
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// Construct API URL
+	url := fmt.Sprintf("https://leakcheck.io/api/public?check=%s", username)
+
+	// Create request
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		Redf("[-] Error creating LeakCheck request: %v", err).Println()
+		return
+	}
+
+	// Set headers
+	req.Header.Set("User-Agent", DefaultUserAgent)
+	req.Header.Set("X-API-Key", apikey)
+
+	// Send request
+	resp, err := client.Do(req)
+	if err != nil {
+		Redf("[-] Error querying LeakCheck: %v", err).Println()
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		Redf("[-] Invalid LeakCheck API key. Get one at: https://leakcheck.io/").Println()
+		return
+	}
+
+	if resp.StatusCode != 200 {
+		Redf("[-] LeakCheck returned status: %d", resp.StatusCode).Println()
+		return
+	}
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		Redf("[-] Error reading LeakCheck response: %v", err).Println()
+		return
+	}
+
+	// Parse response
+	var response LeakCheckResponse
+	err = sonic.Unmarshal(body, &response)
+	if err != nil {
+		Redf("[-] Error parsing LeakCheck response: %v", err).Println()
+		return
+	}
+
+	if response.Found == 0 {
+		Red("[-] No leaks found for ", username, " on LeakCheck.").Println()
+		WriteToFile(username, "[-] No leaks found on LeakCheck")
+		return
+	}
+
+	// Display results
+	Greenf("[+] Found %d leaks on LeakCheck.io:\n", response.Found).Println()
+	WriteToFile(username, fmt.Sprintf("[+] Found %d leaks on LeakCheck", response.Found))
+
+	table := tablewriter.NewTable(os.Stdout)
+	table.Header("No", "Email/Username", "Password", "Sources")
+
+	for i, result := range response.Result {
+		identifier := result.Email
+		if identifier == "" {
+			identifier = result.Username
+		}
+		password := result.Password
+		if password == "" {
+			password = "[hashed/unavailable]"
+		}
+		sources := strings.Join(result.Sources, ", ")
+		table.Append(i+1, Green(identifier), Red(password), Cyan(sources))
+		WriteToFile(username, fmt.Sprintf("[+] %s | Password: %s | Sources: %s", identifier, password, sources))
+	}
+
+	if err := table.Render(); err != nil {
+		log.Printf("table render failed: %v", err)
+	}
+}
+
+// SearchDeHashed searches DeHashed for leaked credentials.
+func SearchDeHashed(username string, credentials string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	Yellow("[*] Searching ", username, " on DeHashed...").Println()
+	WriteToFile(username, strings.Repeat("⎯", 85))
+	WriteToFile(username, "[*] DeHashed Results:")
+
+	// Parse credentials (email:api_key format)
+	parts := strings.SplitN(credentials, ":", 2)
+	if len(parts) != 2 {
+		Redf("[-] Invalid DeHashed credentials. Use format: email:api_key").Println()
+		return
+	}
+	email := parts[0]
+	apikey := parts[1]
+
+	// Initialize HTTP client
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// Construct API URL
+	url := fmt.Sprintf("https://api.dehashed.com/search?query=username:%s", username)
+
+	// Create request
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		Redf("[-] Error creating DeHashed request: %v", err).Println()
+		return
+	}
+
+	// Set basic auth and headers
+	req.SetBasicAuth(email, apikey)
+	req.Header.Set("Accept", "application/json")
+
+	// Send request
+	resp, err := client.Do(req)
+	if err != nil {
+		Redf("[-] Error querying DeHashed: %v", err).Println()
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		Redf("[-] Invalid DeHashed credentials. Get API access at: https://dehashed.com/").Println()
+		return
+	}
+
+	if resp.StatusCode != 200 {
+		Redf("[-] DeHashed returned status: %d", resp.StatusCode).Println()
+		return
+	}
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		Redf("[-] Error reading DeHashed response: %v", err).Println()
+		return
+	}
+
+	// Parse response
+	var response DeHashedResponse
+	err = sonic.Unmarshal(body, &response)
+	if err != nil {
+		Redf("[-] Error parsing DeHashed response: %v", err).Println()
+		return
+	}
+
+	if response.Total == 0 {
+		Red("[-] No results found for ", username, " on DeHashed.").Println()
+		WriteToFile(username, "[-] No results found on DeHashed")
+		return
+	}
+
+	// Display results
+	Greenf("[+] Found %d results on DeHashed (Balance: %d credits):\n", response.Total, response.Balance).Println()
+	WriteToFile(username, fmt.Sprintf("[+] Found %d results on DeHashed", response.Total))
+
+	table := tablewriter.NewTable(os.Stdout)
+	table.Header("No", "Email", "Username", "Password", "Database")
+
+	for i, entry := range response.Entries {
+		password := entry.Password
+		if password == "" {
+			password = entry.HashedPassword
+			if password == "" {
+				password = "[unavailable]"
+			} else {
+				password = "[hashed] " + password[:min(20, len(password))] + "..."
+			}
+		}
+		table.Append(i+1, Green(entry.Email), Cyan(entry.Username), Red(password), Yellow(entry.Database))
+		WriteToFile(username, fmt.Sprintf("[+] Email: %s | Username: %s | Password: %s | DB: %s", entry.Email, entry.Username, password, entry.Database))
+	}
+
+	if err := table.Render(); err != nil {
+		log.Printf("table render failed: %v", err)
+	}
+}
+
+// SearchIntelX searches Intelligence X for leaks and pastes.
+func SearchIntelX(username string, apikey string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	Yellow("[*] Searching ", username, " on Intelligence X...").Println()
+	WriteToFile(username, strings.Repeat("⎯", 85))
+	WriteToFile(username, "[*] Intelligence X Results:")
+
+	// Initialize HTTP client
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// Step 1: Create search
+	searchPayload := fmt.Sprintf(`{"term":"%s","buckets":[],"lookuplevel":0,"maxresults":100,"timeout":0,"datefrom":"","dateto":"","sort":4,"media":0,"terminate":[]}`, username)
+
+	req, err := http.NewRequest(http.MethodPost, "https://2.intelx.io/intelligent/search", strings.NewReader(searchPayload))
+	if err != nil {
+		Redf("[-] Error creating IntelX search request: %v", err).Println()
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Key", apikey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		Redf("[-] Error querying IntelX: %v", err).Println()
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		Redf("[-] Invalid IntelX API key. Get one at: https://intelx.io/").Println()
+		return
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		Redf("[-] Error reading IntelX response: %v", err).Println()
+		return
+	}
+
+	// Parse search ID
+	var searchResult struct {
+		ID string `json:"id"`
+	}
+	err = sonic.Unmarshal(body, &searchResult)
+	if err != nil || searchResult.ID == "" {
+		Redf("[-] Error initiating IntelX search: %v", err).Println()
+		return
+	}
+
+	// Wait a moment for results to be ready
+	time.Sleep(2 * time.Second)
+
+	// Step 2: Get results
+	resultsURL := fmt.Sprintf("https://2.intelx.io/intelligent/search/result?id=%s&limit=100", searchResult.ID)
+	req2, err := http.NewRequest(http.MethodGet, resultsURL, nil)
+	if err != nil {
+		Redf("[-] Error creating IntelX results request: %v", err).Println()
+		return
+	}
+	req2.Header.Set("X-Key", apikey)
+
+	resp2, err := client.Do(req2)
+	if err != nil {
+		Redf("[-] Error fetching IntelX results: %v", err).Println()
+		return
+	}
+	defer resp2.Body.Close()
+
+	body2, err := io.ReadAll(resp2.Body)
+	if err != nil {
+		Redf("[-] Error reading IntelX results: %v", err).Println()
+		return
+	}
+
+	// Parse results
+	var response IntelXResponse
+	err = sonic.Unmarshal(body2, &response)
+	if err != nil {
+		Redf("[-] Error parsing IntelX results: %v", err).Println()
+		return
+	}
+
+	if len(response.Records) == 0 {
+		Red("[-] No results found for ", username, " on Intelligence X.").Println()
+		WriteToFile(username, "[-] No results found on Intelligence X")
+		return
+	}
+
+	// Display results
+	Greenf("[+] Found %d results on Intelligence X:\n", len(response.Records)).Println()
+	WriteToFile(username, fmt.Sprintf("[+] Found %d results on IntelX", len(response.Records)))
+
+	table := tablewriter.NewTable(os.Stdout)
+	table.Header("No", "Name", "Date", "Source")
+
+	for i, record := range response.Records {
+		table.Append(i+1, Green(record.Name), Yellow(record.Date), Cyan(record.Bucket))
+		WriteToFile(username, fmt.Sprintf("[+] Name: %s | Date: %s | Source: %s", record.Name, record.Date, record.Bucket))
+	}
+
+	if err := table.Render(); err != nil {
+		log.Printf("table render failed: %v", err)
+	}
+}
+
+// SearchGitHubCode searches GitHub for potentially leaked credentials in public repos.
+func SearchGitHubCode(username string, token string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	Yellow("[*] Searching GitHub for leaked credentials containing ", username, "...").Println()
+	WriteToFile(username, strings.Repeat("⎯", 85))
+	WriteToFile(username, "[*] GitHub Code Search Results:")
+
+	// Initialize HTTP client
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// Search queries to find potential credential leaks
+	queries := []string{
+		fmt.Sprintf(`"%s" password`, username),
+		fmt.Sprintf(`"%s" secret`, username),
+		fmt.Sprintf(`"%s" api_key`, username),
+		fmt.Sprintf(`"%s" token`, username),
+	}
+
+	var allResults []GitHubCodeSearchItem
+
+	for _, query := range queries {
+		// URL encode the query
+		encodedQuery := strings.ReplaceAll(query, " ", "+")
+		encodedQuery = strings.ReplaceAll(encodedQuery, `"`, "%22")
+
+		url := fmt.Sprintf("https://api.github.com/search/code?q=%s&per_page=10", encodedQuery)
+
+		req, err := http.NewRequest(http.MethodGet, url, nil)
+		if err != nil {
+			continue
+		}
+
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Accept", "application/vnd.github.v3+json")
+		req.Header.Set("User-Agent", "GoSearch-OSINT")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			continue
+		}
+
+		if resp.StatusCode == 403 {
+			Yellow("[!] GitHub rate limit reached. Try again later.").Println()
+			resp.Body.Close()
+			break
+		}
+
+		if resp.StatusCode == 401 {
+			Redf("[-] Invalid GitHub token.").Println()
+			resp.Body.Close()
+			return
+		}
+
+		if resp.StatusCode != 200 {
+			resp.Body.Close()
+			continue
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			continue
+		}
+
+		var searchResp GitHubCodeSearchResponse
+		err = sonic.Unmarshal(body, &searchResp)
+		if err != nil {
+			continue
+		}
+
+		allResults = append(allResults, searchResp.Items...)
+
+		// Rate limit: wait between queries
+		time.Sleep(2 * time.Second)
+	}
+
+	if len(allResults) == 0 {
+		Red("[-] No potential credential leaks found for ", username, " on GitHub.").Println()
+		WriteToFile(username, "[-] No credential leaks found on GitHub")
+		return
+	}
+
+	// Deduplicate results by URL
+	seen := make(map[string]bool)
+	var uniqueResults []GitHubCodeSearchItem
+	for _, item := range allResults {
+		if !seen[item.HTMLURL] {
+			seen[item.HTMLURL] = true
+			uniqueResults = append(uniqueResults, item)
+		}
+	}
+
+	Greenf("[+] Found %d potential credential exposures on GitHub:\n", len(uniqueResults)).Println()
+	Yellow("[!] WARNING: Review these manually - may contain false positives").Println()
+	WriteToFile(username, fmt.Sprintf("[+] Found %d potential exposures on GitHub", len(uniqueResults)))
+
+	table := tablewriter.NewTable(os.Stdout)
+	table.Header("No", "Repository", "File", "URL")
+
+	for i, item := range uniqueResults {
+		if i >= 20 { // Limit display to 20 results
+			Yellowf("[...] %d more results not shown", len(uniqueResults)-20).Println()
+			break
+		}
+		table.Append(i+1, Cyan(item.Repository.FullName), Yellow(item.Name), Green(item.HTMLURL))
+		WriteToFile(username, fmt.Sprintf("[+] Repo: %s | File: %s | URL: %s", item.Repository.FullName, item.Name, item.HTMLURL))
+	}
+
+	if err := table.Render(); err != nil {
+		log.Printf("table render failed: %v", err)
 	}
 }
 

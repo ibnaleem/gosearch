@@ -1910,6 +1910,36 @@
       "base_url": "https://modrinth.com/user/{}",
       "follow_redirects": true,
       "errorType": "status_code"
+    },
+    {
+      "name": "GitHub Gist",
+      "base_url": "https://gist.github.com/{}",
+      "follow_redirects": true,
+      "errorType": "status_code"
+    },
+    {
+      "name": "Rentry",
+      "base_url": "https://rentry.co/{}",
+      "follow_redirects": true,
+      "errorType": "status_code"
+    },
+    {
+      "name": "PrivateBin (0bin)",
+      "base_url": "https://0bin.net/?{}",
+      "follow_redirects": true,
+      "errorType": "status_code"
+    },
+    {
+      "name": "JustPaste.it",
+      "base_url": "https://justpaste.it/u/{}",
+      "follow_redirects": true,
+      "errorType": "status_code"
+    },
+    {
+      "name": "ControlC",
+      "base_url": "https://controlc.com/{}",
+      "follow_redirects": true,
+      "errorType": "status_code"
     }
     ]
 }
