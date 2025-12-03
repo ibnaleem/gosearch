@@ -13,6 +13,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -253,7 +254,7 @@ type IntelXRecord struct {
 	Date       string `json:"date"`       // Date found
 	Bucket     string `json:"bucket"`     // Source bucket
 	Type       int    `json:"type"`       // Result type
-	MediaType  int    `json:"mediah"`     // Media type
+	MediaType  int    `json:"media"`      // Media type
 }
 
 // GitHubCodeSearchResponse represents GitHub code search API response.
@@ -938,10 +939,12 @@ func SearchHIBP(username string, apikey string, wg *sync.WaitGroup) {
 	client := &http.Client{Timeout: 30 * time.Second}
 
 	// Construct API URL - HIBP can search by email or username
-	url := fmt.Sprintf("https://haveibeenpwned.com/api/v3/breachedaccount/%s?truncateResponse=false", username)
+	// Use url.PathEscape to properly encode special characters in path
+	escapedUsername := url.PathEscape(username)
+	apiURL := fmt.Sprintf("https://haveibeenpwned.com/api/v3/breachedaccount/%s?truncateResponse=false", escapedUsername)
 
 	// Create request
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
 	if err != nil {
 		Redf("[-] Error creating HIBP request: %v", err).Println()
 		return
@@ -1027,11 +1030,11 @@ func SearchLeakCheck(username string, apikey string, wg *sync.WaitGroup) {
 	// Initialize HTTP client
 	client := &http.Client{Timeout: 30 * time.Second}
 
-	// Construct API URL
-	url := fmt.Sprintf("https://leakcheck.io/api/public?check=%s", username)
+	// Construct API URL with proper URL encoding
+	apiURL := fmt.Sprintf("https://leakcheck.io/api/public?check=%s", url.QueryEscape(username))
 
 	// Create request
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
 	if err != nil {
 		Redf("[-] Error creating LeakCheck request: %v", err).Println()
 		return
@@ -1123,14 +1126,20 @@ func SearchDeHashed(username string, credentials string, wg *sync.WaitGroup) {
 	email := parts[0]
 	apikey := parts[1]
 
+	// Validate email and apikey are not empty
+	if email == "" || apikey == "" {
+		Redf("[-] Email and API key cannot be empty").Println()
+		return
+	}
+
 	// Initialize HTTP client
 	client := &http.Client{Timeout: 30 * time.Second}
 
-	// Construct API URL
-	url := fmt.Sprintf("https://api.dehashed.com/search?query=username:%s", username)
+	// Construct API URL with proper URL encoding
+	apiURL := fmt.Sprintf("https://api.dehashed.com/search?query=username:%s", url.QueryEscape(username))
 
 	// Create request
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
 	if err != nil {
 		Redf("[-] Error creating DeHashed request: %v", err).Println()
 		return
@@ -1216,10 +1225,38 @@ func SearchIntelX(username string, apikey string, wg *sync.WaitGroup) {
 	// Initialize HTTP client
 	client := &http.Client{Timeout: 30 * time.Second}
 
-	// Step 1: Create search
-	searchPayload := fmt.Sprintf(`{"term":"%s","buckets":[],"lookuplevel":0,"maxresults":100,"timeout":0,"datefrom":"","dateto":"","sort":4,"media":0,"terminate":[]}`, username)
+	// Step 1: Create search with properly encoded JSON payload
+	type intelXSearchPayload struct {
+		Term        string        `json:"term"`
+		Buckets     []interface{} `json:"buckets"`
+		Lookuplevel int           `json:"lookuplevel"`
+		Maxresults  int           `json:"maxresults"`
+		Timeout     int           `json:"timeout"`
+		Datefrom    string        `json:"datefrom"`
+		Dateto      string        `json:"dateto"`
+		Sort        int           `json:"sort"`
+		Media       int           `json:"media"`
+		Terminate   []interface{} `json:"terminate"`
+	}
+	payload := intelXSearchPayload{
+		Term:        username,
+		Buckets:     []interface{}{},
+		Lookuplevel: 0,
+		Maxresults:  100,
+		Timeout:     0,
+		Datefrom:    "",
+		Dateto:      "",
+		Sort:        4,
+		Media:       0,
+		Terminate:   []interface{}{},
+	}
+	searchPayloadBytes, err := sonic.Marshal(payload)
+	if err != nil {
+		Redf("[-] Error marshaling IntelX search payload: %v", err).Println()
+		return
+	}
 
-	req, err := http.NewRequest(http.MethodPost, "https://2.intelx.io/intelligent/search", strings.NewReader(searchPayload))
+	req, err := http.NewRequest(http.MethodPost, "https://2.intelx.io/intelligent/search", strings.NewReader(string(searchPayloadBytes)))
 	if err != nil {
 		Redf("[-] Error creating IntelX search request: %v", err).Println()
 		return
@@ -1334,13 +1371,12 @@ func SearchGitHubCode(username string, token string, wg *sync.WaitGroup) {
 	var allResults []GitHubCodeSearchItem
 
 	for _, query := range queries {
-		// URL encode the query
-		encodedQuery := strings.ReplaceAll(query, " ", "+")
-		encodedQuery = strings.ReplaceAll(encodedQuery, `"`, "%22")
+		// URL encode the query properly using net/url package
+		encodedQuery := url.QueryEscape(query)
 
-		url := fmt.Sprintf("https://api.github.com/search/code?q=%s&per_page=10", encodedQuery)
+		apiURL := fmt.Sprintf("https://api.github.com/search/code?q=%s&per_page=10", encodedQuery)
 
-		req, err := http.NewRequest(http.MethodGet, url, nil)
+		req, err := http.NewRequest(http.MethodGet, apiURL, nil)
 		if err != nil {
 			continue
 		}
@@ -1412,12 +1448,17 @@ func SearchGitHubCode(username string, token string, wg *sync.WaitGroup) {
 	table := tablewriter.NewTable(os.Stdout)
 	table.Header("No", "Repository", "File", "URL")
 
+	// Display up to 20 results in the table
 	for i, item := range uniqueResults {
 		if i >= 20 { // Limit display to 20 results
 			Yellowf("[...] %d more results not shown", len(uniqueResults)-20).Println()
 			break
 		}
 		table.Append(i+1, Cyan(item.Repository.FullName), Yellow(item.Name), Green(item.HTMLURL))
+	}
+
+	// Write all results to the output file (not limited to 20)
+	for _, item := range uniqueResults {
 		WriteToFile(username, fmt.Sprintf("[+] Repo: %s | File: %s | URL: %s", item.Repository.FullName, item.Name, item.HTMLURL))
 	}
 
