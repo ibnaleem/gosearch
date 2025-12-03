@@ -1442,7 +1442,7 @@ func CrackHash(hash string) string {
 
 	// Set request headers
 	req.Header.Set("User-Agent", DefaultUserAgent)
-	req.Header.Set("accept:", "application/json")
+	req.Header.Set("Accept", "application/json")
 
 	// Send request
 	res, err := client.Do(req)
