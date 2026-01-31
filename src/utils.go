@@ -153,7 +153,7 @@ func UnmarshalJSON() (Data, error) {
 	var data Data
 	err = sonic.Unmarshal(jsonData, &data)
 	if err != nil {
-		return Data{}, fmt.Errorf("error unmarshalling JSON: %w", err)
+		return Data{}, fmt.Errorf("error unmarshalling JSON in utils.go line 154: %w", err)
 	}
 
 	return data, nil
