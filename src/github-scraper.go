@@ -11,20 +11,22 @@ import (
 )
 
 type GitHubUser struct {
-	NodeID        string     `json:"node_id,omitempty"`
-	GravatarID	  string 	 `json:"gravatar_id,omitempty"`
-	Name 		  string 	 `json:"name,omitempty"`
-	Company 	  string 	 `json:"company,omitempty"`
-	Blog          string     `json:"blog,omitempty"`
-	Location      string     `json:"location,omitempty"`
-	Email         string     `json:"email,omitempty"`
-	Bio           string     `json:"bio,omitempty"`
-	PublicRepos   string     `json:"public_repo,omitempty"`
-	PublicGists   string     `json:"public_gists,omitempty"`
-	Followers     string     `json:"followers,omitempty"`
-	Following     string     `json:"following,omitempty"`
-	CreatedAt     string     `json:"created_at,omitempty"`
-	UpdatedAt     string     `json:"updated_at,omitempty"`
+	NodeID           string     `json:"node_id,omitempty"`
+	GravatarID	     string 	 `json:"gravatar_id,omitempty"`
+	AvatarURL        string     `json:"avatar_url,omitempty"`
+	TwitterUsername  string		`json:"twitter_username,omitempty"`
+	Name 		     string 	 `json:"name,omitempty"`
+	Company 	     string 	 `json:"company,omitempty"`
+	Blog             string     `json:"blog,omitempty"`
+	Location         string     `json:"location,omitempty"`
+	Email            string     `json:"email,omitempty"`
+	Bio              string     `json:"bio,omitempty"`
+	PublicRepos      string     `json:"public_repo,omitempty"`
+	PublicGists      string     `json:"public_gists,omitempty"`
+	Followers        string     `json:"followers,omitempty"`
+	Following        string     `json:"following,omitempty"`
+	CreatedAt        string     `json:"created_at,omitempty"`
+	UpdatedAt        string     `json:"updated_at,omitempty"`
 }
 
 var mutualFollowers = []string{}
