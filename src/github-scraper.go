@@ -86,6 +86,10 @@ func DisplayGitHubInfo(githubUser GitHubUser, username string) {
 	Greenf("[+] ↳ Created at: %s", githubUser.CreatedAt)
 	Greenf("[+] ↳ Updated at: %s", githubUser.UpdatedAt)
 
+	if githubUser.Name != "" {
+		Greenf("[+] ↳ Name: %s", githubUser.Name)
+	}
+
 	if githubUser.Email != "" {
 		Greenf("[+] ↳ Email: %s", githubUser.Email)
 	}
