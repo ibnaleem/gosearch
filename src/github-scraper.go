@@ -30,7 +30,7 @@ type GitHubUser struct {
 var mutualFollowers = []string{}
 
 
-func ScrapeGitHubProfile(username string) {
+func UnmarshalGitHubProfile(username string) {
 	client := http.Client{}
 
 	url := fmt.Sprintf("https://api.github.com/users/%s", username)
