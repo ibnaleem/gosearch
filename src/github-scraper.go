@@ -116,6 +116,14 @@ func DisplayGitHubInfo(githubUser GitHubUser, username string) {
 		Greenf("[+] ↳ Gravatar ID: %s", githubUser.GravatarID)
 	}
 
+	if githubUser.TwitterUsername != "" {
+		Greenf("[+] ↳ Twitter username: %s", githubUser.TwitterUsername)
+	}
+
+	if githubUser.AvatarURL != "" {
+		Greenf("[+] ↳ Avatar URL: %s", githubUser.AvatarURL)
+	}
+
 	Greenf("[+] ↳ Number of public repositories: %s", githubUser.PublicRepos)
 	Greenf("[+] ↳ Number of public gists: %s", githubUser.PublicGists)
 
