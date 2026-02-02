@@ -38,6 +38,7 @@ func UnmarshalGitHubProfile(username string) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
 			log.Fatal("In function ScrapeGitHubProfile (line 36): ", err)
+			return
 	}
 	req.Header.Set("User-Agent", DefaultUserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
@@ -54,12 +55,14 @@ func UnmarshalGitHubProfile(username string) {
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		fmt.Errorf("failed to fetch GitHub profile in ScrapeGitHubProfile, line 54, status code: %d", resp.StatusCode)
+		return
 	}
 
 	githubJSONData, err := io.ReadAll(resp.Body)
@@ -68,4 +71,46 @@ func UnmarshalGitHubProfile(username string) {
 	var githubUser GitHubUser
 
 	err = json.Unmarshal(githubJSONData, &githubUser)
+
+	if err != nil {
+		fmt.Errorf("error unmarshalling JSON in utils.go line 154: %w", err)
+		return
+	}
+
+	DisplayGitHubInfo(githubUser, username)
+}
+
+func DisplayGitHubInfo(githubUser GitHubUser, username string) {
+
+	Greenf("[+] GitHub username found: %s", username)
+	Greenf("[+] ↳ Created at: %s", githubUser.CreatedAt)
+	Greenf("[+] ↳ Updated at: %s", githubUser.UpdatedAt)
+
+	if githubUser.Email != "" {
+		Greenf("[+] ↳ Email: %s", githubUser.Email)
+	}
+
+	if githubUser.Location != "" {
+		Greenf("[+] ↳ Current location: %s", githubUser.Location)
+	}
+
+	if githubUser.Bio != "" {
+		Greenf("[+] ↳ Bio: %s", githubUser.Bio)
+	}
+
+	if githubUser.Company != "" {
+		Greenf("[+] ↳ Current company: %s", githubUser.Company)
+	}
+
+	if githubUser.Blog != "" {
+		Greenf("[+] ↳ Blog/personal website: %s", githubUser.Blog)
+	}
+
+	Greenf("[+] ↳ Number of public repositories: %s", githubUser.PublicRepos)
+	Greenf("[+] ↳ Number of public gists: %s", githubUser.PublicGists)
+
+	Greenf("[+] ↳ Number of followers: %s", githubUser.Followers)
+	Greenf("[+] ↳ Number of people they follow: %s", githubUser.Following)
+
+	Greenf("[+] ↳ Node ID: %s", githubUser.NodeID)
 }
