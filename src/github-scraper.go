@@ -34,6 +34,13 @@ type GitHubFollower struct {
 	ID 				string 		`json:"id,omitempty"`
 }
 
+type GitHubFollowing struct {
+
+	Login 	        string 		`json:"login,omitempty"`
+	ID 				string 		`json:"id,omitempty"`
+
+}
+
 var mutualFollowers = []string{}
 
 
@@ -85,6 +92,59 @@ func UnmarshalGitHubProfile(username string) (GitHubUser, error) {
 	}
 
 	return githubUser, nil
+
+}
+
+
+func UnmarshalGitHubFollowers(username string) ([]GitHubFollower, error) {
+
+	client := http.Client{}
+
+	url := fmt.Sprintf("https://api.github.com/%s/followers", username)
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+		if err != nil {
+			log.Fatal("In function ScrapeGitHubProfile (line 36): ", err)
+			return []GitHubFollower{}, err
+	}
+	req.Header.Set("User-Agent", DefaultUserAgent)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
+	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+	req.Header.Set("Connection", "keep-alive")
+	req.Header.Set("Upgrade-Insecure-Requests", "1")
+	req.Header.Set("Sec-Fetch-Dest", "document")
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
+	req.Header.Set("Sec-Fetch-Site", "none")
+	req.Header.Set("Sec-Fetch-User", "?1")
+	req.Header.Set("Cache-Control", "max-age=0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+		return []GitHubFollower{}, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Errorf("failed to fetch GitHub profile in ScrapeGitHubProfile, line 54, status code: %d", resp.StatusCode)
+		return []GitHubFollower{}, err
+	}
+
+	githubJSONData, err := io.ReadAll(resp.Body)
+
+
+	var githubFollowers []GitHubFollower
+
+	err = json.Unmarshal(githubJSONData, &githubFollowers)
+
+	if err != nil {
+		fmt.Errorf("error unmarshalling JSON in utils.go line 154: %w", err)
+		return []GitHubFollower{}, err
+	}
+
+	return githubFollowers, nil
 
 }
 
