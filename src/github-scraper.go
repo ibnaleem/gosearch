@@ -29,7 +29,7 @@ type GitHubUser struct {
 	UpdatedAt        string     `json:"updated_at,omitempty"`
 }
 
-type GitHubFollower struct {
+type GitHubFollowers struct {
 	Login 	        string 		`json:"login,omitempty"`
 	ID 				string 		`json:"id,omitempty"`
 }
