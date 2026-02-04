@@ -32,7 +32,7 @@ type GitHubUser struct {
 var mutualFollowers = []string{}
 
 
-func UnmarshalGitHubProfile(username string) {
+func UnmarshalGitHubProfile(username string) (GitHubUser, error) {
 	client := http.Client{}
 
 	url := fmt.Sprintf("https://api.github.com/users/%s", username)
@@ -40,7 +40,7 @@ func UnmarshalGitHubProfile(username string) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
 			log.Fatal("In function ScrapeGitHubProfile (line 36): ", err)
-			return
+			return GitHubUser{}, err
 	}
 	req.Header.Set("User-Agent", DefaultUserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
@@ -57,14 +57,14 @@ func UnmarshalGitHubProfile(username string) {
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Fatal(err)
-		return
+		return GitHubUser{}, err
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		fmt.Errorf("failed to fetch GitHub profile in ScrapeGitHubProfile, line 54, status code: %d", resp.StatusCode)
-		return
+		return GitHubUser{}, err
 	}
 
 	githubJSONData, err := io.ReadAll(resp.Body)
@@ -76,10 +76,11 @@ func UnmarshalGitHubProfile(username string) {
 
 	if err != nil {
 		fmt.Errorf("error unmarshalling JSON in utils.go line 154: %w", err)
-		return
+		return GitHubUser{}, err
 	}
 
-	DisplayGitHubInfo(githubUser, username)
+	return githubUser, nil
+
 }
 
 func DisplayGitHubInfo(githubUser GitHubUser, username string) {
