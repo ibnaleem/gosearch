@@ -160,13 +160,13 @@ func UnmarshalJSON() (Data, error) {
 	return data, nil
 }
 
-func UnmarshalStruct[T any](url string, isArray bool) (any, error) {
+func UnmarshalStruct[T any](url string) (any, error) {
     // Since GoSearch unmarshals JSON plenty, we can create a function that returns the type
 	// This prevents repetitive code
 
 	client := http.Client{}
 
-	var zero any
+	var zero T
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
@@ -200,21 +200,12 @@ func UnmarshalStruct[T any](url string, isArray bool) (any, error) {
 
 	JSONData, err := io.ReadAll(resp.Body)
 
-
-	if isArray {
-		var successObj []T
-		err = json.Unmarshal(JSONData, &successObj)
-		if err != nil {
-			return zero, fmt.Errorf("error unmarshalling JSON (array): %w", err)
-		}
-		return successObj, nil
-	} else {
-		var successObj T
-		err = json.Unmarshal(JSONData, &successObj)
-		if err != nil {
-			return zero, fmt.Errorf("error unmarshalling JSON (singular): %w", err)
-		}
-		return successObj, nil
+	var result T
+	err = json.Unmarshal(JSONData, &result)
+	if err != nil {
+		return zero, fmt.Errorf("error unmarshalling JSON: %w", err)
 	}
+
+	return result, nil
 
 }
