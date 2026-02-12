@@ -29,13 +29,11 @@ type GitHubUser struct {
 
 type GitHubFollowers struct {
 	Login 	        string 		`json:"login,omitempty"`
-	ID 				string 		`json:"id,omitempty"`
 }
 
 type GitHubFollowing struct {
 
 	Login 	        string 		`json:"login,omitempty"`
-	ID 				string 		`json:"id,omitempty"`
 
 }
 
