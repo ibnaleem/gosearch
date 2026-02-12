@@ -4,7 +4,8 @@ package main
 
 import (
 	"fmt"
-	"unsafe"
+	"net/http"
+	"log"
 )
 
 type GitHubUser struct {
@@ -20,8 +21,8 @@ type GitHubUser struct {
 	Bio              string     `json:"bio,omitempty"`
 	PublicRepos      int     `json:"public_repo,omitempty"`
 	PublicGists      int     `json:"public_gists,omitempty"`
-	Followers        []GitHubFollowers    `json:"followers,omitempty"`
-	Following        []GitHubFollowing     `json:"following,omitempty"`
+	Followers        int    `json:"followers,omitempty"`
+	Following        int    `json:"following,omitempty"`
 	CreatedAt        string     `json:"created_at,omitempty"`
 	UpdatedAt        string     `json:"updated_at,omitempty"`
 }
@@ -40,39 +41,48 @@ type GitHubFollowing struct {
 
 
 
-func FindMutualFollowers(followers []GitHubFollowers, following []GitHubFollowing) []string {
+func FindMutualFollowers(followers []GitHubFollowers, username string) ([]string, error) {
 
 	var mutualFollowers []string
 
-	if unsafe.Sizeof(GitHubFollowers{}) > unsafe.Sizeof(GitHubFollowing{}) {
-		hashmap := make(map[string]GitHubFollowing)
+	client := http.Client{}
 
-		for _, followed := range following {
-			hashmap[followed.ID] = followed
+	for _, follower := range followers {
+
+		following_url := fmt.Sprintf("https://api.github.com/users/%s/following/%s", username, follower.Login)
+
+		req, err := http.NewRequest(http.MethodGet, following_url, nil)
+
+		req.Header.Set("User-Agent", DefaultUserAgent)
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.5")
+		req.Header.Set("Connection", "keep-alive")
+		req.Header.Set("Upgrade-Insecure-Requests", "1")
+		req.Header.Set("Sec-Fetch-Dest", "document")
+		req.Header.Set("Sec-Fetch-Mode", "navigate")
+		req.Header.Set("Sec-Fetch-Site", "none")
+		req.Header.Set("Sec-Fetch-User", "?1")
+		req.Header.Set("Cache-Control", "max-age=0")
+
+		if err != nil {
+			log.Fatal("In function FindMutualFollowers (line 52): ", err)
+			return mutualFollowers, err
 		}
 
-		for _, follower := range followers {
-			if follower, exists := hashmap[follower.ID]; exists {
-				mutualFollowers = append(mutualFollowers, follower.Login)
-			}
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Fatal(err)
+			return mutualFollowers, err
 		}
 
-	} else {
-		hashmap := make(map[string]GitHubFollowers)
+		defer resp.Body.Close()
 
-		for _, follower := range followers {
-			hashmap[follower.ID] = follower
+		if resp.StatusCode == 204 {
+			mutualFollowers = append(mutualFollowers, follower.Login)
 		}
-
-		for _, followed := range following {
-			if followed, exists := hashmap[followed.ID]; exists {
-				mutualFollowers = append(mutualFollowers, followed.Login)
-			}
-		}
-
 	}
 
-	return mutualFollowers
+	return mutualFollowers, nil
 }
 
 
