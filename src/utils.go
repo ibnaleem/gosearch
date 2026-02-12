@@ -160,7 +160,7 @@ func UnmarshalJSON() (Data, error) {
 	return data, nil
 }
 
-func UnmarshalStruct[T any](url string) (any, error) {
+func UnmarshalStruct[T any](url string) (T, error) {
     // Since GoSearch unmarshals JSON plenty, we can create a function that returns the type
 	// This prevents repetitive code
 
