@@ -2,7 +2,10 @@
 
 package main
 
-import ("unsafe")
+import (
+	"fmt"
+	"unsafe"
+)
 
 type GitHubUser struct {
 	NodeID           string     `json:"node_id,omitempty"`
@@ -72,6 +75,24 @@ func FindMutualFollowers(followers []GitHubFollowers, following []GitHubFollowin
 	return mutualFollowers
 }
 
+
+func DisplayMutualFollowers(mutualFollowers []string) {
+	if len(mutualFollowers) > 10 {
+		top10 := mutualFollowers[:10]
+
+		fmt.Println("[+] Top 10 Mutual Followers:")
+
+		for i := range(top10) {
+			fmt.Printf("[+] ↳ %s", i)
+		}
+	} else {
+		fmt.Println("[+] Mutual Followers:")
+
+		for i := range(mutualFollowers) {
+			fmt.Printf("[+] ↳ %s", i)
+		}
+	}
+}
 
 func DisplayGitHubInfo(githubUser GitHubUser, username string) {
 
