@@ -31,13 +31,6 @@ type GitHubFollowers struct {
 	Login 	        string 		`json:"login,omitempty"`
 }
 
-type GitHubFollowing struct {
-
-	Login 	        string 		`json:"login,omitempty"`
-
-}
-
-
 
 func FindMutualFollowers(followers []GitHubFollowers, username string) ([]string, error) {
 
