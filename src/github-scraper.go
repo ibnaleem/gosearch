@@ -18,8 +18,8 @@ type GitHubUser struct {
 	Location         string     `json:"location,omitempty"`
 	Email            string     `json:"email,omitempty"`
 	Bio              string     `json:"bio,omitempty"`
-	PublicRepos      string     `json:"public_repo,omitempty"`
-	PublicGists      string     `json:"public_gists,omitempty"`
+	PublicRepos      int     `json:"public_repo,omitempty"`
+	PublicGists      int     `json:"public_gists,omitempty"`
 	Followers        []GitHubFollowers    `json:"followers,omitempty"`
 	Following        []GitHubFollowing     `json:"following,omitempty"`
 	CreatedAt        string     `json:"created_at,omitempty"`
