@@ -2,6 +2,8 @@
 
 package main
 
+import ("unsafe")
+
 type GitHubUser struct {
 	NodeID           string     `json:"node_id,omitempty"`
 	GravatarID	     string 	 `json:"gravatar_id,omitempty"`
@@ -33,7 +35,42 @@ type GitHubFollowing struct {
 
 }
 
-var mutualFollowers = []string{}
+
+
+func FindMutualFollowers(followers []GitHubFollowers, following []GitHubFollowing) []string {
+
+	var mutualFollowers []string
+
+	if unsafe.Sizeof(GitHubFollowers{}) > unsafe.Sizeof(GitHubFollowing{}) {
+		hashmap := make(map[string]GitHubFollowing)
+
+		for _, followed := range following {
+			hashmap[followed.ID] = followed
+		}
+
+		for _, follower := range followers {
+			if follower, exists := hashmap[follower.ID]; exists {
+				mutualFollowers = append(mutualFollowers, follower.Login)
+			}
+		}
+
+	} else {
+		hashmap := make(map[string]GitHubFollowers)
+
+		for _, follower := range followers {
+			hashmap[follower.ID] = follower
+		}
+
+		for _, followed := range following {
+			if followed, exists := hashmap[followed.ID]; exists {
+				mutualFollowers = append(mutualFollowers, followed.Login)
+			}
+		}
+
+	}
+
+	return mutualFollowers
+}
 
 
 func DisplayGitHubInfo(githubUser GitHubUser, username string) {
