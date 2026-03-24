@@ -32,3 +32,8 @@ go.work.sum
 # development folders
 lab
 tmp
+
+
+# binaries
+src/gosearch
+tests/test
