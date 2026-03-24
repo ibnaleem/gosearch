@@ -3,7 +3,6 @@ module github.com/ibnaleem/gosearch
 go 1.24.1
 
 require (
-	github.com/bytedance/sonic v1.14.0
 	github.com/ibnaleem/gobreach v0.0.0-20250116204935-7ddbbc80aa72
 	github.com/inancgumus/screen v0.0.0-20190314163918-06e984b86ed3
 	github.com/olekukonko/tablewriter v1.0.6-0.20250516170326-571d727fad4b
