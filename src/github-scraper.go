@@ -105,8 +105,6 @@ func DisplayMutualFollowers(mutualFollowers []string) {
 
 func DisplayGitHubInfo(githubUser GitHubUser, username string) {
 
-	fmt.Println()
-
 	Greenf("[+] GitHub username found: %s", username).Println()
 	Greenf("[+] ↳ Created at: %s", githubUser.CreatedAt).Println()
 	Greenf("[+] ↳ Updated at: %s", githubUser.UpdatedAt).Println()
@@ -154,4 +152,6 @@ func DisplayGitHubInfo(githubUser GitHubUser, username string) {
 	Greenf("[+] ↳ Number of people they follow: %d", githubUser.Following).Println()
 
 	Greenf("[+] ↳ Node ID: %s", githubUser.NodeID).Println()
+
+	fmt.Println()
 }
