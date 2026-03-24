@@ -37,3 +37,8 @@ tmp
 # binaries
 src/gosearch
 tests/test
+
+# text files
+tests/*.txt
+src/*.txt
+*.txt
