@@ -11,6 +11,7 @@ import (
 	"strings"
 	"net/http"
 	"encoding/json"
+	"compress/gzip"
 	"path/filepath"
 
 	"github.com/bytedance/sonic"
@@ -160,6 +161,33 @@ func UnmarshalJSON() (Data, error) {
 	return data, nil
 }
 
+
+func UnmarshalGitHubUser(username string) (GitHubUser, error) {
+
+	url := fmt.Sprintf("https://api.github.com/users/%s", username)
+	resp, err := http.Get(url)
+	if err != nil {
+		return GitHubUser{}, fmt.Errorf("utils.go (167-168):\nurl := fmt.Sprintf('https://api.github.com/users/\%s', username)\nresp, err := http.Get(url)\n\nerror fetching user %s with constructed url %s: %w", username, url, err)
+	}
+
+	defer resp.Body.Close()
+
+	jsonData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return GitHubUser{}, fmt.Errorf("utils.go (175):\njsonData, err := io.ReadAll(resp.Body)\n\nerror reading response body for user %s with constructed url %s with body length of %d: %w", username, url, len(resp.Body), err)
+	}
+
+	var githubUser GitHubUser
+	err = sonic.Unmarshal(jsonData, &githubUser)
+	if err != nil {
+		return GitHubUser{}, fmt.Errorf("utils.go (180-181):\nvar githubUser GitHubUser\nerr = sonic.Unmarshal(jsonData, &githubUser)\n\nerror unmarshing response body using sonic for user %s with constructed url %s: %w", username, url, err) 
+	}
+
+	return githubUser, nil
+}
+
+
+
 func UnmarshalStruct[T any](url string) (T, error) {
     // Since GoSearch unmarshals JSON plenty, we can create a function that returns the type
 	// This prevents repetitive code
@@ -174,7 +202,7 @@ func UnmarshalStruct[T any](url string) (T, error) {
 			return zero, err
 	}
 	req.Header.Set("User-Agent", DefaultUserAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
 	req.Header.Set("Connection", "keep-alive")
 	req.Header.Set("Upgrade-Insecure-Requests", "1")
@@ -197,7 +225,21 @@ func UnmarshalStruct[T any](url string) (T, error) {
 		return zero, err
 	}
 
-	JSONData, err := io.ReadAll(resp.Body)
+	var reader io.ReadCloser
+	switch resp.Header.Get("Content-Encoding") {
+	case "gzip":
+		reader, err = gzip.NewReader(resp.Body)
+		if err != nil {
+			return zero, err
+		}
+		defer reader.Close()
+	default:
+		reader = resp.Body
+	}
+
+	JSONData, err := io.ReadAll(reader)
+	fmt.Println(string(JSONData))
+
 
 	var result T
 	err = json.Unmarshal(JSONData, &result)
