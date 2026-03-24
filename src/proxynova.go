@@ -10,8 +10,8 @@ import (
 	"sync"
 	"strings"
 	"net/http"
+	"encoding/json"
 
-	"github.com/bytedance/sonic"
 	"github.com/olekukonko/tablewriter"
 )
 
@@ -47,7 +47,7 @@ func SearchProxyNova(username string, wg *sync.WaitGroup) {
 	}
 
 	var response ProxyNova
-	err = sonic.Unmarshal(body, &response)
+	err = json.Unmarshal(body, &response)
 	if err != nil {
 		fmt.Println("Error parsing JSON in SearchProxyNova function:", err)
 		return

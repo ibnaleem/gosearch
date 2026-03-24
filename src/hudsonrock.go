@@ -10,8 +10,9 @@ import (
 	"sync"
 	"strings"
 	"net/http"
+	"encoding/json"
 
-	"github.com/bytedance/sonic"
+
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
 )
@@ -57,7 +58,7 @@ func HudsonRock(username string, wg *sync.WaitGroup) {
 	}
 
 	var response HudsonRockResponse
-	if err := sonic.Unmarshal(body, &response); err != nil {
+	if err := json.Unmarshal(body, &response); err != nil {
 		Red("Error parsing JSON:").Print()
 		White(" " + err.Error()).Println()
 		return

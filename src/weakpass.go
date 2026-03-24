@@ -6,8 +6,7 @@ import (
 	"io"
 	"fmt"
 	"net/http"
-	
-	"github.com/bytedance/sonic"
+	"encoding/json"
 )
 
 type WeakpassResponse struct {
@@ -43,7 +42,7 @@ func CrackHash(hash string) string {
 	}
 
 	var weakpass WeakpassResponse
-	err = sonic.Unmarshal(jsonData, &weakpass)
+	err = json.Unmarshal(jsonData, &weakpass)
 	if err != nil {
 		fmt.Printf("Error unmarshalling JSON: %v\n", err)
 		return ""

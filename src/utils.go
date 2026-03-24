@@ -11,10 +11,8 @@ import (
 	"strings"
 	"net/http"
 	"encoding/json"
-	"compress/gzip"
 	"path/filepath"
 
-	"github.com/bytedance/sonic"
 )
 
 func plural(n int) string {
@@ -153,7 +151,7 @@ func UnmarshalJSON() (Data, error) {
 	}
 
 	var data Data
-	err = sonic.Unmarshal(jsonData, &data)
+	err = json.Unmarshal(jsonData, &data)
 	if err != nil {
 		return Data{}, fmt.Errorf("error unmarshalling JSON in utils.go line 154: %w", err)
 	}
@@ -167,86 +165,21 @@ func UnmarshalGitHubUser(username string) (GitHubUser, error) {
 	url := fmt.Sprintf("https://api.github.com/users/%s", username)
 	resp, err := http.Get(url)
 	if err != nil {
-		return GitHubUser{}, fmt.Errorf("utils.go (167-168):\nurl := fmt.Sprintf('https://api.github.com/users/\%s', username)\nresp, err := http.Get(url)\n\nerror fetching user %s with constructed url %s: %w", username, url, err)
+		return GitHubUser{}, fmt.Errorf("utils.go (167-168):\nurl := fmt.Sprintf('https://api.github.com/users/%s', username)\nresp, err := http.Get(url)\n\nerror fetching user %s with constructed url %s: %w", username, url, err)
 	}
 
 	defer resp.Body.Close()
 
 	jsonData, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return GitHubUser{}, fmt.Errorf("utils.go (175):\njsonData, err := io.ReadAll(resp.Body)\n\nerror reading response body for user %s with constructed url %s with body length of %d: %w", username, url, len(resp.Body), err)
+		return GitHubUser{}, fmt.Errorf("utils.go (175):\njsonData, err := io.ReadAll(resp.Body)\n\nerror reading response body for user %s with constructed url %s: %w", username, url, err)
 	}
 
 	var githubUser GitHubUser
-	err = sonic.Unmarshal(jsonData, &githubUser)
+	err = json.Unmarshal(jsonData, &githubUser)
 	if err != nil {
-		return GitHubUser{}, fmt.Errorf("utils.go (180-181):\nvar githubUser GitHubUser\nerr = sonic.Unmarshal(jsonData, &githubUser)\n\nerror unmarshing response body using sonic for user %s with constructed url %s: %w", username, url, err) 
+		return GitHubUser{}, fmt.Errorf("utils.go (180-181):\nvar githubUser GitHubUser\nerr = json.Unmarshal(jsonData, &githubUser)\n\nerror unmarshing response body using json for user %s with constructed url %s: %w", username, url, err) 
 	}
 
 	return githubUser, nil
-}
-
-
-
-func UnmarshalStruct[T any](url string) (T, error) {
-    // Since GoSearch unmarshals JSON plenty, we can create a function that returns the type
-	// This prevents repetitive code
-
-	client := http.Client{}
-
-	var zero T
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-		if err != nil {
-			log.Fatal("In function UnmarshalStruct (line 56): ", err)
-			return zero, err
-	}
-	req.Header.Set("User-Agent", DefaultUserAgent)
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
-	req.Header.Set("Connection", "keep-alive")
-	req.Header.Set("Upgrade-Insecure-Requests", "1")
-	req.Header.Set("Sec-Fetch-Dest", "document")
-	req.Header.Set("Sec-Fetch-Mode", "navigate")
-	req.Header.Set("Sec-Fetch-Site", "none")
-	req.Header.Set("Sec-Fetch-User", "?1")
-	req.Header.Set("Cache-Control", "max-age=0")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Fatal(err)
-		return zero, err
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		fmt.Errorf("failed to fetch API in UnmarshalStruct, line 81, status code: %d", resp.StatusCode)
-		return zero, err
-	}
-
-	var reader io.ReadCloser
-	switch resp.Header.Get("Content-Encoding") {
-	case "gzip":
-		reader, err = gzip.NewReader(resp.Body)
-		if err != nil {
-			return zero, err
-		}
-		defer reader.Close()
-	default:
-		reader = resp.Body
-	}
-
-	JSONData, err := io.ReadAll(reader)
-	fmt.Println(string(JSONData))
-
-
-	var result T
-	err = json.Unmarshal(JSONData, &result)
-	if err != nil {
-		return zero, fmt.Errorf("error unmarshalling JSON: %w", err)
-	}
-
-	return result, nil
-
 }
