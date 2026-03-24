@@ -452,6 +452,21 @@ func Search(data Data, username string, noFalsePositives bool, wg *sync.WaitGrou
 				url = BuildURL(website.BaseURL, username)
 			}
 
+			if strings.TrimSpace(website.Name) == "GitHub" {
+
+				
+				githubUser, err := UnmarshalGitHubUser(username)
+				
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				fmt.Println()
+
+				DisplayGitHubInfo(githubUser, username)
+			}
+
+
 			switch website.ErrorType {
 			case "status_code":
 				MakeRequestWithErrorCode(website, url, username)
