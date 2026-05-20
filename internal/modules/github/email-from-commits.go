@@ -5,9 +5,30 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/ibnaleem/gosearch/internal/config"
 )
+
+// ExtractEmailsFromCommits returns a deduplicated map of email -> author name
+// from PushEvents, filtering out GitHub's noreply privacy addresses.
+func ExtractEmailsFromCommits(events []GitHubEvent) map[string]string {
+	emails := make(map[string]string)
+
+	for _, event := range events {
+		if event.Type != "PushEvent" {
+			continue
+		}
+		for _, commit := range event.Payload.Commits {
+			if commit.Author.Email == "" || strings.Contains(commit.Author.Email, "noreply.github.com") {
+				continue
+			}
+			emails[commit.Author.Email] = commit.Author.Name
+		}
+	}
+
+	return emails
+}
 
 func FetchPublicEvents(username string) ([]GitHubEvent, error) {
 	var allEvents []GitHubEvent
