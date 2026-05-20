@@ -115,14 +115,23 @@ func FetchPublicEvents(username string) ([]GitHubEvent, error) {
 
 type GitHubEvent struct {
 	Type    string            `json:"type"`
+	Repo    GitHubEventRepo   `json:"repo"`
 	Payload GitHubPushPayload `json:"payload"`
 }
 
-type GitHubPushPayload struct {
-	Commits []GitHubCommit `json:"commits"`
+type GitHubEventRepo struct {
+	Name string `json:"name"`
 }
 
-type GitHubCommit struct {
+type GitHubPushPayload struct {
+	Head string `json:"head"`
+}
+
+type GitHubCommitResponse struct {
+	Commit GitHubCommitDetail `json:"commit"`
+}
+
+type GitHubCommitDetail struct {
 	Author  GitHubCommitAuthor `json:"author"`
 	Message string             `json:"message"`
 }
