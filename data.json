@@ -579,7 +579,7 @@
       "name": "Hubski",
       "base_url": "https://hubski.com/user/{}",
       "follow_redirects": true,
-      "errorType": "errorMsg",
+      "errorType": "unknown",
       "errorMsg": "<a href=\"/\">No such user.</a>"
     },
     {
@@ -1191,13 +1191,6 @@
       "base_url": "https://hubpages.com/@{}",
       "follow_redirects": true,
       "errorType": "status_code"
-    },
-    {
-      "name": "Hubski",
-      "base_url": "https://hubski.com/user/{}",
-      "follow_redirects": true,
-      "errorType": "errorMsg",
-      "errorMsg": "No such user."
     },
     {
       "name": "IFTTT",
