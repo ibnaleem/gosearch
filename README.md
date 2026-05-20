@@ -9,6 +9,9 @@
 </p>
 <hr>
 
+> [!WARNING]  
+> For your own privacy and security, ***never download GoSearch from anywhere other than this repository.*** In the future, I will publish releases with `SHA256` hashes and `.gpg` signed binaries with my PGP key
+
 ## Overview
 <p align='center'>
 <img src='img/1.png' height=80% width=80%><br>
