@@ -47,6 +47,10 @@ func FetchGPGKeys(username string) ([]GitHubGPGKey, error) {
 		return nil, fmt.Errorf("error reading response: %w", err)
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned %d (rate limit may be exceeded)", resp.StatusCode)
+	}
+
 	var keys []GitHubGPGKey
 	if err := json.Unmarshal(body, &keys); err != nil {
 		return nil, fmt.Errorf("error parsing GPG keys: %w", err)

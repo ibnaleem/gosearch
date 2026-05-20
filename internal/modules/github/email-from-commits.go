@@ -107,6 +107,10 @@ func FetchCommit(repo, sha string) (GitHubCommitAuthor, error) {
 		return GitHubCommitAuthor{}, fmt.Errorf("error reading response: %w", err)
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		return GitHubCommitAuthor{}, fmt.Errorf("GitHub API returned %d (rate limit may be exceeded)", resp.StatusCode)
+	}
+
 	var commitResp GitHubCommitResponse
 	if err := json.Unmarshal(body, &commitResp); err != nil {
 		return GitHubCommitAuthor{}, fmt.Errorf("error parsing commit: %w", err)
@@ -136,6 +140,10 @@ func FetchPublicEvents(username string) ([]GitHubEvent, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("error reading response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned %d (rate limit may be exceeded)", resp.StatusCode)
 	}
 
 	var events []GitHubEvent
