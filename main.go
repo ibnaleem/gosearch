@@ -17,6 +17,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/renderer"
 	"github.com/olekukonko/tablewriter/tw"
+	"github.com/joho/godotenv"
 
 	"github.com/ibnaleem/gosearch/internal/config"
 	"github.com/ibnaleem/gosearch/internal/modules/breachdirectory"
@@ -29,6 +30,9 @@ import (
 )
 
 func main() {
+
+	godotenv.Load() // silently ignored if no .env file
+
 	var username string
 	var apikey string
 
