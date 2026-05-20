@@ -304,7 +304,7 @@ func Search(data models.Data, username string, noFalsePositives bool, wg *sync.W
 				}
 				fmt.Println()
 				github.DisplayGitHubInfo(githubUser, username)
-				github.DisplayEmailsFromCommits(username)
+				return
 			}
 
 			switch website.ErrorType {
