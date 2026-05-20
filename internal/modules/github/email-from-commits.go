@@ -95,6 +95,7 @@ func FetchCommit(repo, sha string) (GitHubCommitAuthor, error) {
 	}
 	req.Header.Set("User-Agent", config.DefaultUserAgent)
 	req.Header.Set("Accept", "application/vnd.github+json")
+	setAuthHeader(req)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -108,7 +109,7 @@ func FetchCommit(repo, sha string) (GitHubCommitAuthor, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return GitHubCommitAuthor{}, fmt.Errorf("GitHub API returned %d (rate limit may be exceeded)", resp.StatusCode)
+		return GitHubCommitAuthor{}, fmt.Errorf("GitHub API returned %d — unauthenticated requests are limited to 60 req/hour; set GITHUB_TOKEN for 5,000 req/hour", resp.StatusCode)
 	}
 
 	var commitResp GitHubCommitResponse
@@ -130,6 +131,7 @@ func FetchPublicEvents(username string) ([]GitHubEvent, error) {
 	}
 	req.Header.Set("User-Agent", config.DefaultUserAgent)
 	req.Header.Set("Accept", "application/vnd.github+json")
+	setAuthHeader(req)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -143,7 +145,7 @@ func FetchPublicEvents(username string) ([]GitHubEvent, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API returned %d (rate limit may be exceeded)", resp.StatusCode)
+		return nil, fmt.Errorf("GitHub API returned %d — unauthenticated requests are limited to 60 req/hour; set GITHUB_TOKEN for 5,000 req/hour", resp.StatusCode)
 	}
 
 	var events []GitHubEvent
