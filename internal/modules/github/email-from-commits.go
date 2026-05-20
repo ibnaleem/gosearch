@@ -12,6 +12,16 @@ import (
 	"github.com/ibnaleem/gosearch/internal/utils"
 )
 
+func countPushCommits(events []GitHubEvent) int {
+	total := 0
+	for _, event := range events {
+		if event.Type == "PushEvent" {
+			total += len(event.Payload.Commits)
+		}
+	}
+	return total
+}
+
 func DisplayEmailsFromCommits(username string) {
 	theme.Yellow("[*] Extracting emails from public commits for ", username, "...").Println()
 
@@ -21,11 +31,23 @@ func DisplayEmailsFromCommits(username string) {
 		return
 	}
 
+	if len(events) == 0 {
+		theme.Yellow("[!] No public events found — recent activity may be in private repositories").Println()
+		utils.WriteToFile(username, "[!] No public events found\n")
+		return
+	}
+
 	emails := ExtractEmailsFromCommits(events)
 
 	if len(emails) == 0 {
-		theme.Red("[-] No emails found in public commits").Println()
-		utils.WriteToFile(username, "[-] No emails found in public commits\n")
+		pushCommits := countPushCommits(events)
+		if pushCommits > 0 {
+			theme.Yellowf("[!] %d commit(s) found but all use GitHub's noreply address (email privacy is enabled)", pushCommits).Println()
+			utils.WriteToFile(username, fmt.Sprintf("[!] %d commit(s) found but all use noreply address\n", pushCommits))
+		} else {
+			theme.Yellow("[!] No push events in public activity — commits may be to private repositories").Println()
+			utils.WriteToFile(username, "[!] No push events in public activity\n")
+		}
 		return
 	}
 
