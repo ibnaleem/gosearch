@@ -35,6 +35,7 @@ func FetchGPGKeys(username string) ([]GitHubGPGKey, error) {
 	}
 	req.Header.Set("User-Agent", config.DefaultUserAgent)
 	req.Header.Set("Accept", "application/vnd.github+json")
+	setAuthHeader(req)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -48,7 +49,7 @@ func FetchGPGKeys(username string) ([]GitHubGPGKey, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API returned %d (rate limit may be exceeded)", resp.StatusCode)
+		return nil, fmt.Errorf("GitHub API returned %d — unauthenticated requests are limited to 60 req/hour; set GITHUB_TOKEN for 5,000 req/hour", resp.StatusCode)
 	}
 
 	var keys []GitHubGPGKey
