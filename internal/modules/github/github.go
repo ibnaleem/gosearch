@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/ibnaleem/gosearch/internal/config"
 	"github.com/ibnaleem/gosearch/internal/theme"
@@ -34,9 +35,25 @@ type GitHubFollowers struct {
 	Login string `json:"login"`
 }
 
+func setAuthHeader(req *http.Request) {
+	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+}
+
 func UnmarshalGitHubUser(username string) (GitHubUser, error) {
+	client := &http.Client{}
 	url := fmt.Sprintf("https://api.github.com/users/%s", username)
-	resp, err := http.Get(url)
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return GitHubUser{}, fmt.Errorf("error creating request for user %s: %w", username, err)
+	}
+	req.Header.Set("User-Agent", config.DefaultUserAgent)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	setAuthHeader(req)
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return GitHubUser{}, fmt.Errorf("error fetching user %s: %w", username, err)
 	}
@@ -48,8 +65,7 @@ func UnmarshalGitHubUser(username string) (GitHubUser, error) {
 	}
 
 	var githubUser GitHubUser
-	err = json.Unmarshal(jsonData, &githubUser)
-	if err != nil {
+	if err = json.Unmarshal(jsonData, &githubUser); err != nil {
 		return GitHubUser{}, fmt.Errorf("error unmarshalling response for user %s: %w", username, err)
 	}
 
@@ -71,15 +87,8 @@ func FindMutualFollowers(followers []GitHubFollowers, username string) ([]string
 		}
 
 		req.Header.Set("User-Agent", config.DefaultUserAgent)
-		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
-		req.Header.Set("Accept-Language", "en-US,en;q=0.5")
-		req.Header.Set("Connection", "keep-alive")
-		req.Header.Set("Upgrade-Insecure-Requests", "1")
-		req.Header.Set("Sec-Fetch-Dest", "document")
-		req.Header.Set("Sec-Fetch-Mode", "navigate")
-		req.Header.Set("Sec-Fetch-Site", "none")
-		req.Header.Set("Sec-Fetch-User", "?1")
-		req.Header.Set("Cache-Control", "max-age=0")
+		req.Header.Set("Accept", "application/vnd.github+json")
+		setAuthHeader(req)
 
 		resp, err := client.Do(req)
 		if err != nil {
