@@ -12,11 +12,11 @@ import (
 	"github.com/ibnaleem/gosearch/internal/utils"
 )
 
-func countPushCommits(events []GitHubEvent) int {
+func countPushEvents(events []GitHubEvent) int {
 	total := 0
 	for _, event := range events {
-		if event.Type == "PushEvent" {
-			total += len(event.Payload.Commits)
+		if event.Type == "PushEvent" && event.Payload.Head != "" {
+			total++
 		}
 	}
 	return total
@@ -40,10 +40,10 @@ func DisplayEmailsFromCommits(username string) {
 	emails := ExtractEmailsFromCommits(events)
 
 	if len(emails) == 0 {
-		pushCommits := countPushCommits(events)
-		if pushCommits > 0 {
-			theme.Yellowf("[!] %d commit(s) found but all use GitHub's noreply address (email privacy is enabled)", pushCommits).Println()
-			utils.WriteToFile(username, fmt.Sprintf("[!] %d commit(s) found but all use noreply address\n", pushCommits))
+		pushEvents := countPushEvents(events)
+		if pushEvents > 0 {
+			theme.Yellowf("[!] %d push event(s) found but no public emails discovered (email privacy may be enabled)", pushEvents).Println()
+			utils.WriteToFile(username, fmt.Sprintf("[!] %d push event(s) found but no public emails discovered\n", pushEvents))
 		} else {
 			theme.Yellow("[!] No push events in public activity — commits may be to private repositories").Println()
 			utils.WriteToFile(username, "[!] No push events in public activity\n")
@@ -60,21 +60,24 @@ func DisplayEmailsFromCommits(username string) {
 	}
 }
 
-// ExtractEmailsFromCommits returns a deduplicated map of email -> author name
-// from PushEvents, filtering out GitHub's noreply privacy addresses.
+// ExtractEmailsFromCommits returns a deduplicated map of email -> author name.
+// For each PushEvent it fetches the head commit via the commits API, since the
+// public events API omits the commits array from PushEvent payloads.
 func ExtractEmailsFromCommits(events []GitHubEvent) map[string]string {
 	emails := make(map[string]string)
 
 	for _, event := range events {
-		if event.Type != "PushEvent" {
+		if event.Type != "PushEvent" || event.Repo.Name == "" || event.Payload.Head == "" {
 			continue
 		}
-		for _, commit := range event.Payload.Commits {
-			if commit.Author.Email == "" || strings.Contains(commit.Author.Email, "noreply.github.com") {
-				continue
-			}
-			emails[commit.Author.Email] = commit.Author.Name
+		author, err := FetchCommit(event.Repo.Name, event.Payload.Head)
+		if err != nil {
+			continue
 		}
+		if author.Email == "" || strings.Contains(author.Email, "noreply.github.com") {
+			continue
+		}
+		emails[author.Email] = author.Name
 	}
 
 	return emails
