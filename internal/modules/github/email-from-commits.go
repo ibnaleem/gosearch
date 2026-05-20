@@ -83,43 +83,34 @@ func ExtractEmailsFromCommits(events []GitHubEvent) map[string]string {
 var githubAPIBase = "https://api.github.com"
 
 func FetchPublicEvents(username string) ([]GitHubEvent, error) {
-	var allEvents []GitHubEvent
 	client := &http.Client{}
 
-	for page := 1; page <= 10; page++ {
-		url := fmt.Sprintf("%s/users/%s/events/public?page=%d", githubAPIBase, username, page)
+	url := fmt.Sprintf("%s/users/%s/events/public", githubAPIBase, username)
 
-		req, err := http.NewRequest(http.MethodGet, url, nil)
-		if err != nil {
-			return allEvents, fmt.Errorf("error creating request: %w", err)
-		}
-		req.Header.Set("User-Agent", config.DefaultUserAgent)
-		req.Header.Set("Accept", "application/vnd.github+json")
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %w", err)
+	}
+	req.Header.Set("User-Agent", config.DefaultUserAgent)
+	req.Header.Set("Accept", "application/vnd.github+json")
 
-		resp, err := client.Do(req)
-		if err != nil {
-			return allEvents, fmt.Errorf("error fetching events: %w", err)
-		}
-		defer resp.Body.Close()
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching events: %w", err)
+	}
+	defer resp.Body.Close()
 
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return allEvents, fmt.Errorf("error reading response: %w", err)
-		}
-
-		var events []GitHubEvent
-		if err := json.Unmarshal(body, &events); err != nil {
-			return allEvents, fmt.Errorf("error parsing events: %w", err)
-		}
-
-		if len(events) == 0 {
-			break
-		}
-
-		allEvents = append(allEvents, events...)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response: %w", err)
 	}
 
-	return allEvents, nil
+	var events []GitHubEvent
+	if err := json.Unmarshal(body, &events); err != nil {
+		return nil, fmt.Errorf("error parsing events: %w", err)
+	}
+
+	return events, nil
 }
 
 type GitHubEvent struct {
