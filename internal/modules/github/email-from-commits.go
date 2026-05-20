@@ -58,12 +58,14 @@ func ExtractEmailsFromCommits(events []GitHubEvent) map[string]string {
 	return emails
 }
 
+var githubAPIBase = "https://api.github.com"
+
 func FetchPublicEvents(username string) ([]GitHubEvent, error) {
 	var allEvents []GitHubEvent
 	client := &http.Client{}
 
 	for page := 1; page <= 10; page++ {
-		url := fmt.Sprintf("https://api.github.com/users/%s/events/public?page=%d", username, page)
+		url := fmt.Sprintf("%s/users/%s/events/public?page=%d", githubAPIBase, username, page)
 
 		req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
