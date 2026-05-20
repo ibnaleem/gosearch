@@ -42,3 +42,6 @@ tests/test
 tests/*.txt
 src/*.txt
 *.txt
+
+# Claude Code
+CLAUDE.md
