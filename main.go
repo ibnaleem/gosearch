@@ -20,6 +20,7 @@ import (
 
 	"github.com/ibnaleem/gosearch/internal/config"
 	"github.com/ibnaleem/gosearch/internal/modules/breachdirectory"
+	github "github.com/ibnaleem/gosearch/internal/modules/github"
 	"github.com/ibnaleem/gosearch/internal/modules/hudsonrock"
 	"github.com/ibnaleem/gosearch/internal/modules/proxynova"
 	"github.com/ibnaleem/gosearch/internal/search"
@@ -87,6 +88,11 @@ func main() {
 	wg.Add(len(data.Websites))
 	go search.Search(data, username, *noFalsePositivesFlag, &wg)
 	wg.Wait()
+
+	fmt.Println()
+	fmt.Println()
+
+	github.DisplayEmailsFromCommits(username)
 
 	fmt.Println()
 	fmt.Println()
