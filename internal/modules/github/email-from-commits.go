@@ -85,6 +85,36 @@ func ExtractEmailsFromCommits(events []GitHubEvent) map[string]string {
 
 var githubAPIBase = "https://api.github.com"
 
+func FetchCommit(repo, sha string) (GitHubCommitAuthor, error) {
+	client := &http.Client{}
+	url := fmt.Sprintf("%s/repos/%s/commits/%s", githubAPIBase, repo, sha)
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return GitHubCommitAuthor{}, fmt.Errorf("error creating request: %w", err)
+	}
+	req.Header.Set("User-Agent", config.DefaultUserAgent)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return GitHubCommitAuthor{}, fmt.Errorf("error fetching commit: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return GitHubCommitAuthor{}, fmt.Errorf("error reading response: %w", err)
+	}
+
+	var commitResp GitHubCommitResponse
+	if err := json.Unmarshal(body, &commitResp); err != nil {
+		return GitHubCommitAuthor{}, fmt.Errorf("error parsing commit: %w", err)
+	}
+
+	return commitResp.Commit.Author, nil
+}
+
 func FetchPublicEvents(username string) ([]GitHubEvent, error) {
 	client := &http.Client{}
 
