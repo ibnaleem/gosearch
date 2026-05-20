@@ -1181,12 +1181,6 @@
       "errorType": "status_code"
     },
     {
-      "name": "Hashnode",
-      "base_url": "https://hashnode.com/@{}",
-      "follow_redirects": true,
-      "errorType": "status_code"
-    },
-    {
       "name": "Houzz",
       "base_url": "https://houzz.com/user/{}",
       "follow_redirects": true,
