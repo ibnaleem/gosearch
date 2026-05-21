@@ -87,17 +87,16 @@ func DisplayMutualFollowers(mutualFollowers []string) {
 	fmt.Println()
 
 	if len(mutualFollowers) > 10 {
-		top10 := mutualFollowers[:10]
 		theme.Green("[+] Top 10 Mutual Followers:").Println()
-		for i := range top10 {
-			theme.Greenf("[+] ↳ %d", i).Println()
+		for _, login := range mutualFollowers[:10] {
+			theme.Greenf("[+] ↳ %s", login).Println()
 		}
 	}
 
 	if len(mutualFollowers) > 0 {
 		theme.Green("[+] Mutual Followers:").Println()
-		for i := range mutualFollowers {
-			theme.Greenf("[+] ↳ %d", i).Println()
+		for _, login := range mutualFollowers {
+			theme.Greenf("[+] ↳ %s", login).Println()
 		}
 	}
 }
