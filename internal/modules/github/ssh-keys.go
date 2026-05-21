@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/ibnaleem/gosearch/internal/config"
+	"github.com/ibnaleem/gosearch/internal/theme"
+	"github.com/ibnaleem/gosearch/internal/utils"
 )
 
 type GitHubSSHKey struct {
@@ -47,4 +50,29 @@ func FetchSSHKeys(username string) ([]GitHubSSHKey, error) {
 	}
 
 	return keys, nil
+}
+
+func DisplaySSHKeys(username string) {
+	theme.Yellow("[*] Fetching SSH keys for ", username, "...").Println()
+
+	keys, err := FetchSSHKeys(username)
+	if err != nil {
+		theme.Redf("[-] Error fetching SSH keys: %v", err).Println()
+		return
+	}
+
+	if len(keys) == 0 {
+		theme.Yellow("[!] No public SSH keys found").Println()
+		utils.WriteToFile(username, "[!] No public SSH keys found\n")
+		return
+	}
+
+	theme.Greenf("[+] Found %d SSH key(s):", len(keys)).Println()
+	utils.WriteToFile(username, fmt.Sprintf("[+] Found %d SSH key(s):\n", len(keys)))
+
+	for _, key := range keys {
+		keyType := strings.SplitN(key.Key, " ", 2)[0]
+		theme.Greenf("[+] ↳ %s (id: %d)", keyType, key.ID).Println()
+		utils.WriteToFile(username, fmt.Sprintf("[+] ↳ %s (id: %d)\n", keyType, key.ID))
+	}
 }
