@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	"github.com/ibnaleem/gosearch/internal/config"
+	"github.com/ibnaleem/gosearch/internal/theme"
+	"github.com/ibnaleem/gosearch/internal/utils"
 )
 
 type GitHubSocialAccount struct {
@@ -47,4 +49,28 @@ func FetchSocialAccounts(username string) ([]GitHubSocialAccount, error) {
 	}
 
 	return accounts, nil
+}
+
+func DisplaySocialAccounts(username string) {
+	theme.Yellow("[*] Fetching social accounts for ", username, "...").Println()
+
+	accounts, err := FetchSocialAccounts(username)
+	if err != nil {
+		theme.Redf("[-] Error fetching social accounts: %v", err).Println()
+		return
+	}
+
+	if len(accounts) == 0 {
+		theme.Yellow("[!] No social accounts found").Println()
+		utils.WriteToFile(username, "[!] No social accounts found\n")
+		return
+	}
+
+	theme.Greenf("[+] Found %d social account(s):", len(accounts)).Println()
+	utils.WriteToFile(username, fmt.Sprintf("[+] Found %d social account(s):\n", len(accounts)))
+
+	for _, account := range accounts {
+		theme.Greenf("[+] ↳ %s: %s", account.Provider, account.URL).Println()
+		utils.WriteToFile(username, fmt.Sprintf("[+] ↳ %s: %s\n", account.Provider, account.URL))
+	}
 }
