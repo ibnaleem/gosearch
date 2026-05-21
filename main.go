@@ -106,6 +106,11 @@ func main() {
 	fmt.Println()
 	fmt.Println()
 
+	github.DisplaySSHKeys(username)
+
+	fmt.Println()
+	fmt.Println()
+
 	wg.Add(1)
 	utils.WriteToFile(username, strings.Repeat("⎯", 85))
 	theme.Yellow("[*] Searching HudsonRock's Cybercrime Intelligence Database...").Println()
