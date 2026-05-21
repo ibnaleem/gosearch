@@ -116,6 +116,21 @@ func main() {
 	fmt.Println()
 	fmt.Println()
 
+	followers, err := github.FetchFollowers(username)
+	if err != nil {
+		theme.Redf("[-] Error fetching followers: %v", err).Println()
+	} else {
+		mutualFollowers, err := github.FindMutualFollowers(followers, username)
+		if err != nil {
+			theme.Redf("[-] Error finding mutual followers: %v", err).Println()
+		} else {
+			github.DisplayMutualFollowers(mutualFollowers)
+		}
+	}
+
+	fmt.Println()
+	fmt.Println()
+
 	wg.Add(1)
 	utils.WriteToFile(username, strings.Repeat("⎯", 85))
 	theme.Yellow("[*] Searching HudsonRock's Cybercrime Intelligence Database...").Println()
