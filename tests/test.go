@@ -14,10 +14,9 @@ import (
 	"crypto/tls"
 	"compress/gzip"
 	"compress/zlib"
-
+	"encoding/json"
 	"github.com/andybalholm/brotli"
 
-	"github.com/bytedance/sonic"
 )
 
 // Color output constants.
@@ -100,7 +99,7 @@ func UnmarshalJSON() (Data, error) {
 	}
 
 	var data Data
-	err = sonic.Unmarshal(jsonData, &data)
+	err = json.Unmarshal(jsonData, &data)
 	if err != nil {
 		return Data{}, fmt.Errorf("error unmarshalling JSON: %w", err)
 	}
