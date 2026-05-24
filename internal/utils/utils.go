@@ -49,6 +49,32 @@ func WriteToFile(username string, content string) {
 	}
 }
 
+func WriteEmailToFile(username string, email string) {
+	if _, err := os.Stat(config.OutputDir); err != nil {
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(config.OutputDir, os.ModePerm); err != nil {
+				log.Fatal("Error creating output directory:", err)
+			}
+		} else {
+			log.Fatal("Error checking output directory:", err)
+		}
+	}
+	
+	filePath := filepath.Join(config.OutputDir, fmt.Sprintf("%s_emails.txt", username))
+
+	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, os.ModePerm)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer f.Close()
+
+	if _, err = f.WriteString(email); err != nil {
+		log.Fatal(err)
+	}
+}
+
 func BuildURL(baseURL, username string) string {
 	return strings.Replace(baseURL, "{}", username, 1)
 }
