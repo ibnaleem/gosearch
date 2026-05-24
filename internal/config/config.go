@@ -19,7 +19,7 @@ const ASCII = `
 
 const DefaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0"
 
-const VERSION = "v1.0.0"
+const VERSION = "v2.0.0"
 
 var TLSConfig = &tls.Config{
 	MinVersion: tls.VersionTLS12,
