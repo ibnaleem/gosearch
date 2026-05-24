@@ -56,7 +56,7 @@ func DisplayEmailsFromCommits(username string) {
 
 	for email, name := range emails {
 		theme.Greenf("[+] ↳ %s (%s)", email, name).Println()
-		utils.WriteToFile(username, fmt.Sprintf("[+] ↳ %s (%s)\n", email, name))
+		utils.WriteEmailToFile(username, email)
 	}
 }
 

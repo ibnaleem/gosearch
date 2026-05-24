@@ -93,7 +93,7 @@ func DisplayGPGKeys(username string) {
 				verified = " (verified)"
 			}
 			theme.Greenf("[+]   ↳ email: %s%s", email.Email, verified).Println()
-			utils.WriteToFile(username, fmt.Sprintf("[+]   ↳ email: %s%s\n", email.Email, verified))
+			utils.WriteEmailToFile(username, email.Email)
 		}
 
 		if key.Revoked {

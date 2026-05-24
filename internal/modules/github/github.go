@@ -9,6 +9,7 @@ import (
 
 	"github.com/ibnaleem/gosearch/internal/config"
 	"github.com/ibnaleem/gosearch/internal/theme"
+	"github.com/ibnaleem/gosearch/internal/utils"
 )
 
 type GitHubUser struct {
@@ -79,6 +80,7 @@ func DisplayGitHubInfo(githubUser GitHubUser, username string) {
 	}
 	if githubUser.Email != "" {
 		theme.Greenf("[+] ↳ Email: %s", githubUser.Email).Println()
+		utils.WriteEmailToFile(username, githubUser.Email)
 	}
 	if githubUser.Location != "" {
 		theme.Greenf("[+] ↳ Current location: %s", githubUser.Location).Println()
