@@ -2,17 +2,18 @@
   "websites": [
     {
       "name": "Instagram",
-      "base_url": "https://instagram.com/{}",
-      "url_probe": "https://imginn.com/{}",
+      "base_url": "https://www.instagram.com/{}",
       "follow_redirects": true,
       "errorType": "errorMsg",
-      "errorMsg":"<title>Page Not Found - imginn.com</title>"
+      "errorMsg": "<title>Instagram</title>"
     },
     {
       "name": "Twitter/X",
       "base_url": "https://twitter.com/{}",
+      "url_probe": "https://syndication.twitter.com/srv/timeline-profile/screen-name/{}",
       "follow_redirects": true,
-      "errorType": "unknown"
+      "errorType": "errorMsg",
+      "errorMsg": "\"hasResults\":false"
     },
     {
       "name": "GitHub",
@@ -578,7 +579,7 @@
       "name": "Hubski",
       "base_url": "https://hubski.com/user/{}",
       "follow_redirects": true,
-      "errorType": "errorMsg",
+      "errorType": "unknown",
       "errorMsg": "<a href=\"/\">No such user.</a>"
     },
     {
@@ -1180,12 +1181,6 @@
       "errorType": "status_code"
     },
     {
-      "name": "Hashnode",
-      "base_url": "https://hashnode.com/@{}",
-      "follow_redirects": true,
-      "errorType": "status_code"
-    },
-    {
       "name": "Houzz",
       "base_url": "https://houzz.com/user/{}",
       "follow_redirects": true,
@@ -1196,13 +1191,6 @@
       "base_url": "https://hubpages.com/@{}",
       "follow_redirects": true,
       "errorType": "status_code"
-    },
-    {
-      "name": "Hubski",
-      "base_url": "https://hubski.com/user/{}",
-      "follow_redirects": true,
-      "errorType": "errorMsg",
-      "errorMsg": "No such user."
     },
     {
       "name": "IFTTT",
@@ -1908,6 +1896,24 @@
       "base_url": "https://modrinth.com/user/{}",
       "follow_redirects": true,
       "errorType": "status_code"
+    },
+    {
+      "name":"YouPay.me",
+      "base_url":"https://youpay.me/{}",
+      "follow_redirects":true,
+      "errorType":"unknown"
+    },
+    {
+      "name":"JPG6",
+      "base_url":"https://jpg6.su/{}",
+      "follow_redirects":true,
+      "errorType":"status_code"
+    },
+    {
+      "name":"Hackster",
+      "base_url":"https://hackster.io/{}",
+      "follow_redirects":true,
+      "errorType":"status_code"
     }
     ]
 }
