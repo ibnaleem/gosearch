@@ -20,6 +20,7 @@ import (
 
 	"github.com/ibnaleem/gosearch/internal/config"
 	github "github.com/ibnaleem/gosearch/internal/modules/github"
+	"github.com/ibnaleem/gosearch/internal/modules/gravatar"
 	"github.com/ibnaleem/gosearch/internal/models"
 	"github.com/ibnaleem/gosearch/internal/theme"
 	"github.com/ibnaleem/gosearch/internal/utils"
@@ -304,6 +305,12 @@ func Search(data models.Data, username string, noFalsePositives bool, wg *sync.W
 				}
 				fmt.Println()
 				github.DisplayGitHubInfo(githubUser, username)
+				return
+			}
+
+			if strings.TrimSpace(website.Name) == "Gravatar" {
+				fmt.Println()
+				gravatar.SearchGravatar(username)
 				return
 			}
 
