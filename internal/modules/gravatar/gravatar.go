@@ -37,7 +37,7 @@ type GravatarUserAccounts struct {
 func SearchGravatar(username string) {
 	theme.Yellow("[*] Searching Gravatar for ", username, "...").Println()
 
-	url := fmt.Sprintf("https://gravatar.com/users/%s.json", username)
+	url := fmt.Sprintf("https://gravatar.com/%s.json", username)
 	resp, err := http.Get(url)
 	if err != nil {
 		theme.Redf("[-] Error fetching Gravatar data: %v", err).Println()
