@@ -1,7 +1,10 @@
 package gravatar
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 
 	"github.com/ibnaleem/gosearch/internal/theme"
@@ -29,6 +32,47 @@ type GravatarUserAccounts struct {
 	URL      string `json:"url"`
 	Username string `json:"username"`
 	Name     string `json:"name"`
+}
+
+func SearchGravatar(username string) {
+	theme.Yellow("[*] Searching Gravatar for ", username, "...").Println()
+
+	url := fmt.Sprintf("https://gravatar.com/users/%s.json", username)
+	resp, err := http.Get(url)
+	if err != nil {
+		theme.Redf("[-] Error fetching Gravatar data: %v", err).Println()
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		theme.Red("[-] No Gravatar profile found for ", username).Println()
+		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		theme.Redf("[-] Gravatar returned status %d", resp.StatusCode).Println()
+		return
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		theme.Redf("[-] Error reading Gravatar response: %v", err).Println()
+		return
+	}
+
+	var response GravatarResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		theme.Redf("[-] Error parsing Gravatar response: %v", err).Println()
+		return
+	}
+
+	if len(response.Entry) == 0 {
+		theme.Red("[-] No Gravatar profile found for ", username).Println()
+		return
+	}
+
+	DisplayGravatarUserInfo(response.Entry[0])
 }
 
 func DisplayGravatarUserInfo(user GravatarUser) {
