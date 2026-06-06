@@ -204,6 +204,124 @@ Additionally, make sure to use the above code to analyse the response body when 
 
 To contribute, follow the template above, open a PR, and I'll merge it if `GoSearch` can successfully detect the accounts.
 
+---
+
+## Contributing a Module
+
+Modules are Go packages under `internal/modules/` that integrate external APIs or intelligence sources beyond simple username presence checks. Where `data.json` entries check whether a username exists on a website, modules perform deeper lookups: credential breaches, social graph data, cryptographic keys, email extraction, and so on.
+
+### When to add a module vs a site entry
+
+| Scenario | Approach |
+|---|---|
+| Username present/absent on a website | `data.json` entry |
+| External API returning structured data about a user | Module |
+| Source requires authentication (API key, token) | Module |
+| Multi-step HTTP logic that `data.json` cannot express | Module |
+
+### Directory structure
+
+Create a new directory under `internal/modules/`:
+
+```
+internal/modules/yourservice/
+└── yourservice.go
+```
+
+The package name must match the directory name.
+
+### Required function signature
+
+Every module exposes a single entry function that accepts a username and a `*sync.WaitGroup`:
+
+```go
+package yourservice
+
+import (
+    "sync"
+
+    "github.com/ibnaleem/gosearch/internal/theme"
+    "github.com/ibnaleem/gosearch/internal/utils"
+)
+
+func SearchYourService(username string, wg *sync.WaitGroup) {
+    defer wg.Done()
+
+    theme.Yellow("[*] Searching ", username, " on YourService...").Println()
+
+    // your logic here
+
+    // on success:
+    theme.Greenf("[+] Found something: %s", result).Println()
+    utils.WriteToFile(username, "[+] YourService result: "+result+"\n")
+
+    // on failure:
+    theme.Red("[-] Nothing found on YourService for ", username, ".").Println()
+}
+```
+
+Rules:
+- `defer wg.Done()` must be the first statement in the function. Without it the program will hang indefinitely.
+- Use `theme.Yellow` for status messages, `theme.Greenf` for found results, `theme.Red` for not-found.
+- Write any findings to file with `utils.WriteToFile(username, ...)` so they appear in the saved output.
+
+### Environment variables
+
+If your module requires an API key or token, read it from the environment. Do not hardcode credentials or require them as CLI flags:
+
+```go
+import "os"
+
+apiKey := os.Getenv("YOURSERVICE_API_KEY")
+if apiKey == "" {
+    theme.Yellow("[*] YOURSERVICE_API_KEY not set, skipping YourService.").Println()
+    return
+}
+```
+
+Document the variable name in your PR description so it can be added to the README.
+
+### Wiring into main.go
+
+Import your package and call it in `main.go` using the same `wg.Add(1)` / goroutine / `wg.Wait()` pattern as existing modules:
+
+```go
+import "github.com/ibnaleem/gosearch/internal/modules/yourservice"
+
+// in main(), alongside other module calls:
+wg.Add(1)
+go yourservice.SearchYourService(username, &wg)
+wg.Wait()
+```
+
+Place the call in a logical position relative to existing modules. Credential sources belong near `proxynova`; social or profile enrichment belongs near the `github` module.
+
+### Testing your module
+
+Build the binary and run it against a known username:
+
+```
+$ go build -o gosearch .
+$ ./gosearch -u <known-username>
+```
+
+Verify that:
+- The program exits cleanly (WaitGroup released correctly)
+- Found results appear in the terminal and in the output file
+- If no API key is set, the module skips gracefully without panicking
+
+### PR checklist
+
+- [ ] Package name matches the directory name
+- [ ] `defer wg.Done()` is the first statement in the entry function
+- [ ] Terminal output uses `theme` exclusively (no bare `fmt.Println` for results)
+- [ ] Findings are written with `utils.WriteToFile`
+- [ ] API keys are read from environment variables, not hardcoded
+- [ ] Tested against a username that exists on the service and one that does not
+- [ ] `go build ./...` passes cleanly
+
+---
+
 Thank you for improving GoSearch.
 
 <table><tr><td align="center"><a href="https://github.com/ibnaleem"><img alt="ibnaleem" src="https://avatars.githubusercontent.com/u/134088573?v=4" width="117" /><br />ibnaleem</a></td><td align="center"><a href="https://github.com/shelepuginivan"><img alt="shelepuginivan" src="https://avatars.githubusercontent.com/u/110753839?v=4" width="117" /><br />shelepuginivan</a></td><td align="center"><a href="https://github.com/arealibusadrealiora"><img alt="arealibusadrealiora" src="https://avatars.githubusercontent.com/u/113445322?v=4" width="117" /><br />arealibusadrealiora</a></td><td align="center"><a href="https://github.com/AtahanPoyraz"><img alt="AtahanPoyraz" src="https://avatars.githubusercontent.com/u/129458900?v=4" width="117" /><br />AtahanPoyraz</a></td></tr><tr><td align="center"><a href="https://github.com/vickychhetri"><img alt="vickychhetri" src="https://avatars.githubusercontent.com/u/82648574?v=4" width="117" /><br />vickychhetri</a></td><td align="center"><a href="https://github.com/olekukonko"><img alt="olekukonko" src="https://avatars.githubusercontent.com/u/2615393?v=4" width="117" /><br />olekukonko</a></td><td align="center"><a href="https://github.com/CptIdea"><img alt="CptIdea" src="https://avatars.githubusercontent.com/u/59538729?v=4" width="117" /><br />CptIdea</a></td><td align="center"><a href="https://github.com/yoy123"><img alt="yoy123" src="https://avatars.githubusercontent.com/u/32031720?v=4" width="117" /><br />yoy123</a></td></tr><tr><td align="center"><a href="https://github.com/anotherhadi"><img alt="anotherhadi" src="https://avatars.githubusercontent.com/u/112569860?v=4" width="117" /><br />anotherhadi</a></td><td align="center"><a href="https://github.com/paulpogoda"><img alt="paulpogoda" src="https://avatars.githubusercontent.com/u/170966925?v=4" width="117" /><br />paulpogoda</a></td><td align="center"><a href="https://github.com/apps/dependabot"><img alt="dependabot[bot]" src="https://avatars.githubusercontent.com/in/29110?v=4" width="117" /><br />dependabot[bot]</a></td></tr></table>
