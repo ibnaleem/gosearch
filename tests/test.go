@@ -463,9 +463,9 @@ func Mode4(url string, errorMsg string) {
 	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String() + Reset)
 
 	if strings.Contains(bodyStr, errorMsg) {
-		  fmt.Println(Green+"[+] Error message found in response body: " + errorMsg + "\n[+] This means if a profile does not exist on %s", url, "I can detect it!" + Reset)
+		  fmt.Println(Green+"[+] Error message found in response body: " + errorMsg + "\n[+] This means if a profile does not exist on " + url + " I can detect it!" + Reset)
     } else {
-      fmt.Println(Red+"[-] Error message not found in response body: " + errorMsg + "\n[-] This means if a profile does not exist on %s", url, "I CANNOT detect it!" + Reset)
+      fmt.Println(Red+"[-] Error message not found in response body: " + errorMsg + "\n[-] This means if a profile does not exist on " + url + " I CANNOT detect it!" + Reset)
     }
 }
 
