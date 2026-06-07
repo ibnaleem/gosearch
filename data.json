@@ -1914,6 +1914,13 @@
       "base_url":"https://hackster.io/{}",
       "follow_redirects":true,
       "errorType":"status_code"
-    }
+    },
+    {
+      "name": "frail.lol",
+      "base_url": "https://frail.lol/{}",
+      "follow_redirects": true,
+      "errorType": "errorMsg",
+      "errorMsg": "No page found. This username is still available."
+    },
     ]
 }
