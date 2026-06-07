@@ -1921,6 +1921,6 @@
       "follow_redirects": true,
       "errorType": "errorMsg",
       "errorMsg": "No page found. This username is still available."
-    },
+    }
     ]
 }
