@@ -1,6 +1,6 @@
 module github.com/ibnaleem/gosearch
 
-go 1.24.1
+go 1.25.0
 
 require (
 	github.com/ibnaleem/gobreach v0.0.0-20250116204935-7ddbbc80aa72
@@ -24,7 +24,7 @@ require (
 
 require (
 	github.com/andybalholm/brotli v1.2.2
-	golang.org/x/crypto v0.45.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
-	golang.org/x/term v0.37.0 // indirect
+	golang.org/x/crypto v0.52.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/term v0.43.0 // indirect
 )
