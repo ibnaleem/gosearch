@@ -91,5 +91,12 @@ This project is licensed under the GNU General Public License - see the [LICENSE
 ```
 bc1qjrtyq8m7urapu7cvmvrrs6m7qkh2jpn5wqezfl
 ```
-## Stargazers Over Time
-[![Stargazers over time](https://starchart.cc/ibnaleem/gosearch.svg?variant=adaptive)](https://starchart.cc/ibnaleem/gosearch)
+## Star History
+
+<a href="https://www.star-history.com/?repos=ibnaleem%2Fgosearch&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=ibnaleem/gosearch&type=date&theme=dark&legend=top-left&sealed_token=vqdvRKhjoZ2gp3atvVcJi4MS3t2vRYEz9nc1DaVPAAlJ_2pEbS9S-rEfP1lWlbDtHmC-YnCDoYFoEVlfSOzVu0c8QwbjqCvpvRcBJ-V_BQcuxfbbzpzRAn3M8AIG230807aKFtEYnLQ7-JS9eIy7RUjsG5w9PHBF9Vi9aK6OcXXgDa2gd4wNXa4PztHZ" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=ibnaleem/gosearch&type=date&legend=top-left&sealed_token=vqdvRKhjoZ2gp3atvVcJi4MS3t2vRYEz9nc1DaVPAAlJ_2pEbS9S-rEfP1lWlbDtHmC-YnCDoYFoEVlfSOzVu0c8QwbjqCvpvRcBJ-V_BQcuxfbbzpzRAn3M8AIG230807aKFtEYnLQ7-JS9eIy7RUjsG5w9PHBF9Vi9aK6OcXXgDa2gd4wNXa4PztHZ" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=ibnaleem/gosearch&type=date&legend=top-left&sealed_token=vqdvRKhjoZ2gp3atvVcJi4MS3t2vRYEz9nc1DaVPAAlJ_2pEbS9S-rEfP1lWlbDtHmC-YnCDoYFoEVlfSOzVu0c8QwbjqCvpvRcBJ-V_BQcuxfbbzpzRAn3M8AIG230807aKFtEYnLQ7-JS9eIy7RUjsG5w9PHBF9Vi9aK6OcXXgDa2gd4wNXa4PztHZ" />
+ </picture>
+</a>
