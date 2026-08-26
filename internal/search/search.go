@@ -19,9 +19,10 @@ import (
 	"github.com/olekukonko/tablewriter"
 
 	"github.com/ibnaleem/gosearch/internal/config"
+	"github.com/ibnaleem/gosearch/internal/models"
 	github "github.com/ibnaleem/gosearch/internal/modules/github"
 	"github.com/ibnaleem/gosearch/internal/modules/gravatar"
-	"github.com/ibnaleem/gosearch/internal/models"
+	"github.com/ibnaleem/gosearch/internal/modules/keybase"
 	"github.com/ibnaleem/gosearch/internal/theme"
 	"github.com/ibnaleem/gosearch/internal/utils"
 )
@@ -311,6 +312,16 @@ func Search(data models.Data, username string, noFalsePositives bool, wg *sync.W
 			if strings.TrimSpace(website.Name) == "Gravatar" {
 				fmt.Println()
 				gravatar.SearchGravatar(username)
+				return
+			}
+
+			if strings.TrimSpace(website.Name) == "Keybase" {
+				keybaseUser, err := keybase.UnmarshalKeybaseUser(username)
+				if err != nil {
+					log.Fatal(err)
+				}
+				fmt.Println()
+				keybase.DisplayKeybaseInfo(keybaseUser, username)
 				return
 			}
 
