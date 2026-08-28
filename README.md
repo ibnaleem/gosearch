@@ -9,6 +9,10 @@
 </p>
 <hr>
 
+<div align="center">
+  <a href="https://trendshift.io/repositories/13662?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-13662" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/13662" alt="ibnaleem%2Fgosearch | Trendshift" width="250" height="55"/></a>
+</div>
+
 > [!WARNING]  
 > For your own privacy and security, ***never download GoSearch from anywhere other than this repository.*** In the future, I will publish releases with `SHA256` hashes and `.gpg` signed binaries with my PGP key
 
