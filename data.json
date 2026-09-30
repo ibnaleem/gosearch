@@ -1921,6 +1921,12 @@
       "follow_redirects": true,
       "errorType": "errorMsg",
       "errorMsg": "No page found. This username is still available."
+    },
+    {
+      "name":"hoodri.ch",
+      "base_url":"https://hoodri.ch/{}",
+      "follow_redirects": true,
+      "errorType":"status_code"
     }
     ]
 }
