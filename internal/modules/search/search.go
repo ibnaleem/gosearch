@@ -1,0 +1,418 @@
+package search
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"os"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/ibnaleem/gosearch/internal/config"
+	"github.com/ibnaleem/gosearch/internal/file"
+	"github.com/ibnaleem/gosearch/internal/modules"
+	"github.com/ibnaleem/gosearch/internal/theme"
+)
+
+type searchClient struct {
+	fileWriter           *file.FileWriter
+	httpClient           *http.Client
+	noRedirectHTTPClient *http.Client
+	noFalsePositive      bool
+}
+
+func NewSearchClient(fileWriter *file.FileWriter, noFalsePositive bool) modules.Module {
+	httpClient := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: config.TLSConfig,
+			Proxy:           http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+	}
+
+	noRedirectHTTPClient := *httpClient
+	noRedirectHTTPClient.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	return &searchClient{
+		fileWriter:           fileWriter,
+		httpClient:           httpClient,
+		noRedirectHTTPClient: &noRedirectHTTPClient,
+		noFalsePositive:      noFalsePositive,
+	}
+}
+
+func (x *searchClient) Name() string {
+	return "Search"
+}
+
+func (x *searchClient) Search(ctx context.Context, query string) (*modules.Result, error) {
+	domains, err := x.searchDomain(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("%s(searchDomain): search domain: %w", x.Name(), err)
+	}
+
+	sites, err := x.searchSite(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("%s(searchSite): search site: %w", x.Name(), err)
+	}
+
+	var buffer strings.Builder
+
+	if len(domains) > 0 {
+		fmt.Fprintf(&buffer, "[+] Found %d domains with the query %s\n", len(domains), query)
+		for index, domain := range domains {
+			fmt.Fprintf(&buffer, ":: %03d :: %s\n", index+1, domain)
+		}
+	}
+
+	if len(sites) > 0 {
+		fmt.Fprintf(&buffer, "[+] Found %d sites with the query %s\n", len(sites), query)
+		for index, site := range sites {
+			fmt.Fprintf(&buffer, ":: %03d :: %s\n", index+1, site)
+		}
+	}
+
+	if err := x.fileWriter.Write(query, buffer.String()); err != nil {
+		theme.Redf("[!] Could not write output file: %v", err).Println()
+	}
+
+	result := modules.Result{
+		Module:  x.Name(),
+		Summary: fmt.Sprintf("%d domain(s), %d site(s) found", len(domains), len(sites)),
+	}
+
+	return &result, nil
+}
+
+func (x *searchClient) searchDomain(ctx context.Context, query string) ([]string, error) {
+	domains, err := buildDomains(query)
+	if err != nil {
+		return nil, err
+	}
+
+	theme.Cyanf("[*] Searching %d domain(s) for %s...", len(domains), query).Println()
+
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+
+		foundDomains []string
+	)
+
+	for _, domain := range domains {
+		wg.Go(func() {
+			url := fmt.Sprintf("http://%s", domain)
+
+			request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+			if err != nil {
+				theme.Redf("search: create request for %s: %v", domain, err).Println()
+				return
+			}
+
+			request.Header.Set("User-Agent", config.DefaultUserAgent)
+			request.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+			request.Header.Set("Accept-Language", "en-US,en;q=0.5")
+			request.Header.Set("Upgrade-Insecure-Requests", "1")
+			request.Header.Set("Sec-Fetch-Dest", "document")
+			request.Header.Set("Sec-Fetch-Mode", "navigate")
+			request.Header.Set("Sec-Fetch-Site", "none")
+			request.Header.Set("Sec-Fetch-User", "?1")
+			request.Header.Set("Cache-Control", "max-age=0")
+
+			response, err := x.noRedirectHTTPClient.Do(request)
+			if err != nil {
+				var opErr *net.OpError
+				if errors.As(err, &opErr) && opErr.Op == "dial" {
+					return
+				}
+
+				theme.Redf("search: send request to %s: %v", domain, err).Println()
+				return
+			}
+
+			defer response.Body.Close()
+
+			if response.StatusCode >= 200 && response.StatusCode < 400 {
+				mu.Lock()
+				foundDomains = append(foundDomains, domain)
+				mu.Unlock()
+			}
+		})
+	}
+
+	wg.Wait()
+
+	slices.Sort(foundDomains)
+
+	if len(foundDomains) == 0 {
+		theme.Redf("[-] No domains found with the query %s", query).Println()
+		return nil, nil
+	}
+
+	theme.Greenf("[+] Found %d domains with the query %s", len(foundDomains), query).Println()
+
+	for index, domain := range foundDomains {
+		theme.Greenf(":: %03d :: %s", index+1, domain).Println()
+	}
+
+	return foundDomains, nil
+}
+
+func buildDomains(field string) ([]string, error) {
+	tlds := []string{
+		".com", ".net", ".org", ".biz", ".info", ".name", ".pro", ".cat",
+		".co", ".me", ".io", ".tech", ".dev", ".app", ".shop", ".fail",
+		".xyz", ".blog", ".store", ".online", ".space", ".lol", ".fun",
+		".social", ".ai", ".gg", ".tv", ".cc", ".site", ".website",
+		".page", ".link", ".live", ".digital", ".cloud", ".email",
+		".studio", ".design", ".art", ".life", ".world", ".news",
+		".media", ".work", ".wiki", ".chat", ".cool", ".plus",
+		".guru", ".ninja", ".rocks", ".wtf", ".us", ".uk", ".eu",
+		".ca", ".de", ".fr", ".nl", ".in",
+	}
+
+	if field == "" {
+		return nil, errors.New("at least one letter field is required")
+	}
+
+	var domains []string
+	for _, tld := range tlds {
+		domains = append(domains, fmt.Sprintf("%s%s", field, tld))
+	}
+
+	return domains, nil
+}
+
+func (x *searchClient) searchSite(ctx context.Context, query string) ([]string, error) {
+	sites, err := buildResources(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	theme.Cyanf("[*] Searching %d site(s) for %s...", len(sites.Websites), query).Println()
+
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+
+		foundSites     []string
+		uncertainSites []string
+	)
+
+	for _, site := range sites.Websites {
+		wg.Go(func() {
+			url, err := buildSiteURL(site.BaseURL, query)
+			if err != nil {
+				theme.Redf("search: build site URL for %s: %v", site.Name, err).Println()
+				return
+			}
+
+			if site.ErrorType == "unknown" {
+				if !x.noFalsePositive {
+					mu.Lock()
+					uncertainSites = append(uncertainSites, url)
+					mu.Unlock()
+				}
+
+				return
+			}
+
+			probeURL := url
+			if site.URLProbe != "" {
+				probeURL, err = buildSiteURL(site.URLProbe, query)
+				if err != nil {
+					theme.Redf("search: build probe URL for %s: %v", site.Name, err).Println()
+					return
+				}
+			}
+
+			request, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, nil)
+			if err != nil {
+				theme.Redf("search: create request for %s: %v", probeURL, err).Println()
+				return
+			}
+
+			userAgent := config.DefaultUserAgent
+			if site.UserAgent != "" {
+				userAgent = site.UserAgent
+			}
+
+			request.Header.Set("User-Agent", userAgent)
+			request.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+			request.Header.Set("Accept-Language", "en-US,en;q=0.5")
+			request.Header.Set("Upgrade-Insecure-Requests", "1")
+			request.Header.Set("Sec-Fetch-Dest", "document")
+			request.Header.Set("Sec-Fetch-Mode", "navigate")
+			request.Header.Set("Sec-Fetch-Site", "none")
+			request.Header.Set("Sec-Fetch-User", "?1")
+			request.Header.Set("Cache-Control", "max-age=0")
+
+			for _, cookie := range site.Cookies {
+				request.AddCookie(&http.Cookie{Name: cookie.Name, Value: cookie.Value})
+			}
+
+			httpClient := x.httpClient
+			if !site.FollowRedirects {
+				httpClient = x.noRedirectHTTPClient
+			}
+
+			response, err := httpClient.Do(request)
+			if err != nil {
+				return
+			}
+
+			defer response.Body.Close()
+
+			if response.StatusCode >= http.StatusBadRequest {
+				return
+			}
+
+			var found bool
+			switch site.ErrorType {
+			case "status_code":
+				found = response.StatusCode != site.ErrorCode
+
+			case "errorMsg":
+				body, err := io.ReadAll(response.Body)
+				if err != nil {
+					return
+				}
+
+				found = !strings.Contains(string(body), site.ErrorMsg)
+
+			case "profilePresence":
+				body, err := io.ReadAll(response.Body)
+				if err != nil {
+					return
+				}
+
+				found = strings.Contains(string(body), site.ErrorMsg)
+
+			case "response_url":
+				notFoundURL, err := buildSiteURL(site.ResponseURL, query)
+				if err != nil {
+					return
+				}
+
+				found = response.Request.URL.String() != notFoundURL
+			}
+
+			if found {
+				mu.Lock()
+				foundSites = append(foundSites, url)
+				mu.Unlock()
+				return
+			}
+		})
+	}
+
+	wg.Wait()
+
+	slices.Sort(foundSites)
+	slices.Sort(uncertainSites)
+
+	if len(foundSites) == 0 && len(uncertainSites) == 0 {
+		theme.Redf("[-] No sites found with the query %s", query).Println()
+		return nil, nil
+	}
+
+	if len(foundSites) > 0 {
+		theme.Greenf("[+] Found %d sites with the query %s", len(foundSites), query).Println()
+
+		for index, site := range foundSites {
+			theme.Greenf(":: %03d :: %s", index+1, site).Println()
+		}
+	}
+
+	if len(uncertainSites) > 0 {
+		theme.Yellowf("[?] %d unverified sites for the query %s (manual check required)", len(uncertainSites), query).Println()
+
+		for index, site := range uncertainSites {
+			theme.Yellowf(":: %03d :: %s", index+1, site).Println()
+		}
+	}
+
+	return foundSites, nil
+}
+
+type cookie struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+type website struct {
+	Name            string   `json:"name"`
+	BaseURL         string   `json:"base_url"`
+	URLProbe        string   `json:"url_probe,omitempty"`
+	FollowRedirects bool     `json:"follow_redirects"`
+	UserAgent       string   `json:"user_agent,omitempty"`
+	ErrorType       string   `json:"errorType"`
+	ErrorMsg        string   `json:"errorMsg,omitempty"`
+	ErrorCode       int      `json:"errorCode,omitempty"`
+	ResponseURL     string   `json:"response_url,omitempty"`
+	Cookies         []cookie `json:"cookies,omitempty"`
+}
+
+type resource struct {
+	Websites []website `json:"websites"`
+}
+
+func buildResources(ctx context.Context) (*resource, error) {
+	if err := os.Remove("data.json"); err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("delete old data.json: %w", err)
+	}
+
+	url := "https://raw.githubusercontent.com/ibnaleem/gosearch/refs/heads/main/data.json"
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("download data.json: %w", err)
+	}
+
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("send request: %w", err)
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("download data.json: unexpected status %d", response.StatusCode)
+	}
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read data.json: %w", err)
+	}
+
+	var searchResources resource
+	if err := json.Unmarshal(body, &searchResources); err != nil {
+		return nil, fmt.Errorf("decode data.json: %w", err)
+	}
+
+	return &searchResources, nil
+}
+
+func buildSiteURL(baseURL string, field string) (string, error) {
+	if field == "" {
+		return "", errors.New("at least one letter field is required")
+	}
+
+	return strings.ReplaceAll(baseURL, "{}", field), nil
+}
