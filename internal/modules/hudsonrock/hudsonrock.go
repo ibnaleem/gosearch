@@ -1,172 +1,164 @@
 package hudsonrock
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"net"
 	"net/http"
-	"os"
+	"net/url"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/olekukonko/tablewriter"
-	"github.com/olekukonko/tablewriter/tw"
-
+	"github.com/ibnaleem/gosearch/internal/config"
+	"github.com/ibnaleem/gosearch/internal/file"
+	"github.com/ibnaleem/gosearch/internal/modules"
 	"github.com/ibnaleem/gosearch/internal/theme"
-	"github.com/ibnaleem/gosearch/internal/utils"
 )
 
-type HudsonRockResponse struct {
-	Message  string    `json:"message"`
-	Stealers []Stealer `json:"stealers"`
+type hudsonRockClient struct {
+	fileWriter *file.FileWriter
+	httpClient *http.Client
 }
 
-type Stealer struct {
-	TotalCorporateServices int         `json:"total_corporate_services"`
-	TotalUserServices      int         `json:"total_user_services"`
-	DateCompromised        string      `json:"date_compromised"`
-	StealerFamily          string      `json:"stealer_family"`
-	ComputerName           string      `json:"computer_name"`
-	OperatingSystem        string      `json:"operating_system"`
-	MalwarePath            string      `json:"malware_path"`
-	Antiviruses            interface{} `json:"antiviruses"`
-	IP                     string      `json:"ip"`
-	TopPasswords           []string    `json:"top_passwords"`
-	TopLogins              []string    `json:"top_logins"`
-}
-
-func plural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
-}
-
-func formatStealerDate(dateStr string) string {
-	t, err := time.Parse(time.RFC3339, dateStr)
-	if err != nil {
-		return dateStr
-	}
-
-	now := time.Now()
-	diff := now.Sub(t)
-
-	switch {
-	case diff < time.Hour:
-		return "just now"
-	case diff < 24*time.Hour:
-		hours := int(diff.Hours())
-		return fmt.Sprintf("%d hour%s ago", hours, plural(hours))
-	case diff < 7*24*time.Hour:
-		days := int(diff.Hours() / 24)
-		return fmt.Sprintf("%d day%s ago", days, plural(days))
-	default:
-		return t.Format("Jan 2, 2006")
-	}
-}
-
-func HudsonRock(username string, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	url := fmt.Sprintf("https://cavalier.hudsonrock.com/api/json/v2/osint-tools/search-by-username?username=%s", username)
-
-	resp, err := http.Get(url)
-	if err != nil {
-		theme.Redf("Error fetching HudsonRock data:").Print()
-		theme.White(" " + err.Error()).Println()
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		theme.Red("Error reading response:").Print()
-		theme.White(" " + err.Error()).Println()
-		return
-	}
-
-	var response HudsonRockResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		theme.Red("Error parsing JSON:").Print()
-		theme.White(" " + err.Error()).Println()
-		return
-	}
-
-	if response.Message == "This username is not associated with a computer infected by an info-stealer. Visit https://www.hudsonrock.com/free-tools to discover additional free tools and Infostealers related data." {
-		theme.Green("✓ No info-stealer association found").Println()
-		utils.WriteToFile(username, ":: No info-stealer association found")
-		return
-	}
-
-	theme.Red("‼ Info-stealer compromise detected").Println()
-	theme.Yellow("  All credentials on this computer may be exposed").Println()
-
-	table := tablewriter.NewTable(os.Stdout, tablewriter.WithHeaderConfig(tw.CellConfig{
-		Formatting: tw.CellFormatting{
-			AutoFormat: tw.Off,
+func NewHudsonRockClient(fileWriter *file.FileWriter) modules.Module {
+	httpClient := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: config.TLSConfig,
+			Proxy:           http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
 		},
-	}))
-	table.Header([]any{
-		theme.Blue("#"),
-		theme.Blue("Stealer"),
-		theme.Blue("Date"),
-		theme.Blue("Computer"),
-		theme.Blue("Passwords"),
-	})
-
-	var fileContent strings.Builder
-
-	for i, stealer := range response.Stealers {
-		var avs string
-		switch v := stealer.Antiviruses.(type) {
-		case string:
-			avs = v
-		case []interface{}:
-			parts := make([]string, len(v))
-			for i, av := range v {
-				parts[i] = fmt.Sprint(av)
-			}
-			avs = strings.Join(parts, ", ")
-		}
-
-		computerName := stealer.ComputerName
-		if !strings.EqualFold(strings.TrimSpace(computerName), "Not Found") {
-			computerName = theme.Red(computerName).String()
-		}
-		table.Append([]string{
-			fmt.Sprintf("%d", i+1),
-			stealer.StealerFamily,
-			formatStealerDate(stealer.DateCompromised),
-			computerName,
-			strings.Join(stealer.TopPasswords, "\n"),
-		})
-
-		fileContent.WriteString(fmt.Sprintf("[-] Stealer #%d\n", i+1))
-		fileContent.WriteString(fmt.Sprintf(":: Family: %s\n", stealer.StealerFamily))
-		fileContent.WriteString(fmt.Sprintf(":: Date: %s\n", stealer.DateCompromised))
-		fileContent.WriteString(fmt.Sprintf(":: Computer: %s\n", stealer.ComputerName))
-		fileContent.WriteString(fmt.Sprintf(":: OS: %s\n", stealer.OperatingSystem))
-		fileContent.WriteString(fmt.Sprintf(":: Path: %s\n", stealer.MalwarePath))
-		fileContent.WriteString(fmt.Sprintf(":: AV: %s\n", avs))
-		fileContent.WriteString(fmt.Sprintf(":: IP: %s\n", stealer.IP))
-
-		fileContent.WriteString(":: Passwords:\n")
-		for _, p := range stealer.TopPasswords {
-			fileContent.WriteString(fmt.Sprintf("   %s\n", p))
-		}
-
-		fileContent.WriteString(":: Logins:\n")
-		for _, l := range stealer.TopLogins {
-			fileContent.WriteString(fmt.Sprintf("   %s\n", l))
-		}
-		fileContent.WriteString("\n")
 	}
 
-	if err := table.Render(); err != nil {
-		log.Printf("table render failed: %v", err)
+	return &hudsonRockClient{
+		fileWriter: fileWriter,
+		httpClient: httpClient,
+	}
+}
+
+func (x *hudsonRockClient) Name() string {
+	return "HudsonRock"
+}
+
+func (x *hudsonRockClient) Search(ctx context.Context, query string) (*modules.Result, error) {
+	theme.Cyanf("[*] Searching %s on HudsonRock...", query).Println()
+
+	response, err := x.buildRequest(ctx, query)
+	if err != nil {
+		return nil, err
 	}
 
-	utils.WriteToFile(username, fileContent.String())
+	if len(response.Stealers) == 0 {
+		theme.Redf("[-] No HudsonRock profile found for %s", query).Println()
+		return nil, nil
+	}
+
+	var buffer strings.Builder
+
+	theme.Greenf("[+] Found %d info-stealer infection(s) for %s:", len(response.Stealers), query).Println()
+	fmt.Fprintf(&buffer, "[+] Found %d info-stealer infection(s) for %s:\n", len(response.Stealers), query)
+
+	for index, entry := range response.Stealers {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+
+		theme.Greenf(":: %03d :: %-18s : %s", index+1, "Stealer Family", entry.StealerFamily).Println()
+		theme.Greenf("          %-18s : %s", "Date Compromised", entry.DateCompromised).Println()
+		theme.Greenf("          %-18s : %s", "Computer Name", entry.ComputerName).Println()
+		theme.Greenf("          %-18s : %s", "Operating System", entry.OperatingSystem).Println()
+		theme.Greenf("          %-18s : %s", "IP", entry.IP).Println()
+		theme.Greenf("          %-18s : %s", "Malware Path", strings.TrimSpace(entry.MalwarePath)).Println()
+		theme.Greenf("          %-18s : %v", "Antiviruses", entry.Antiviruses).Println()
+		theme.Greenf("          %-18s : %d", "Corporate Services", entry.TotalCorporateServices).Println()
+		theme.Greenf("          %-18s : %d", "User Services", entry.TotalUserServices).Println()
+		theme.Greenf("          %-18s : %s", "Top Passwords", strings.Join(entry.TopPasswords, ", ")).Println()
+		theme.Greenf("          %-18s : %s", "Top Logins", strings.Join(entry.TopLogins, ", ")).Println()
+
+		fmt.Fprintf(&buffer, ":: %03d :: %-18s : %s\n", index+1, "Stealer Family", entry.StealerFamily)
+		fmt.Fprintf(&buffer, "          %-18s : %s\n", "Date Compromised", entry.DateCompromised)
+		fmt.Fprintf(&buffer, "          %-18s : %s\n", "Computer Name", entry.ComputerName)
+		fmt.Fprintf(&buffer, "          %-18s : %s\n", "Operating System", entry.OperatingSystem)
+		fmt.Fprintf(&buffer, "          %-18s : %s\n", "IP", entry.IP)
+		fmt.Fprintf(&buffer, "          %-18s : %s\n", "Malware Path", strings.TrimSpace(entry.MalwarePath))
+		fmt.Fprintf(&buffer, "          %-18s : %v\n", "Antiviruses", entry.Antiviruses)
+		fmt.Fprintf(&buffer, "          %-18s : %d\n", "Corporate Services", entry.TotalCorporateServices)
+		fmt.Fprintf(&buffer, "          %-18s : %d\n", "User Services", entry.TotalUserServices)
+		fmt.Fprintf(&buffer, "          %-18s : %s\n", "Top Passwords", strings.Join(entry.TopPasswords, ", "))
+		fmt.Fprintf(&buffer, "          %-18s : %s\n", "Top Logins", strings.Join(entry.TopLogins, ", "))
+	}
+
+	if err := x.fileWriter.Write(query, buffer.String()); err != nil {
+		theme.Redf("[!] Could not write output file: %v", err).Println()
+	}
+
+	result := modules.Result{
+		Module:  x.Name(),
+		Summary: fmt.Sprintf("%d infection(s) found", len(response.Stealers)),
+	}
+
+	return &result, nil
+}
+
+type hudsonRockResponse struct {
+	Message  string    `json:"message"`
+	Stealers []stealer `json:"stealers"`
+}
+
+type stealer struct {
+	TotalCorporateServices int      `json:"total_corporate_services"`
+	TotalUserServices      int      `json:"total_user_services"`
+	DateCompromised        string   `json:"date_compromised"`
+	StealerFamily          string   `json:"stealer_family"`
+	ComputerName           string   `json:"computer_name"`
+	OperatingSystem        string   `json:"operating_system"`
+	MalwarePath            string   `json:"malware_path"`
+	Antiviruses            any      `json:"antiviruses"`
+	IP                     string   `json:"ip"`
+	TopPasswords           []string `json:"top_passwords"`
+	TopLogins              []string `json:"top_logins"`
+}
+
+func (x *hudsonRockClient) buildRequest(ctx context.Context, param any) (*hudsonRockResponse, error) {
+	endpoint := fmt.Sprintf("https://cavalier.hudsonrock.com/api/json/v2/osint-tools/search-by-username?username=%s", url.QueryEscape(fmt.Sprint(param)))
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%s(buildRequest): create request: %w", x.Name(), err)
+	}
+
+	request.Header.Set("User-Agent", config.DefaultUserAgent)
+	request.Header.Set("Accept", "application/json")
+
+	response, err := x.httpClient.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("%s(buildRequest): send request: %w", x.Name(), err)
+	}
+
+	defer response.Body.Close()
+
+	if err := modules.CheckStatus(x.Name(), "buildRequest", response.StatusCode); err != nil {
+		return nil, err
+	}
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("%s(buildRequest): read response: %w", x.Name(), err)
+	}
+
+	var hudsonRockResponse hudsonRockResponse
+	if err := json.Unmarshal(body, &hudsonRockResponse); err != nil {
+		return nil, fmt.Errorf("%s(buildRequest): decode response: %w", x.Name(), err)
+	}
+
+	return &hudsonRockResponse, nil
 }

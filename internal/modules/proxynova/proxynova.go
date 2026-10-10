@@ -1,76 +1,137 @@
 package proxynova
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"net"
 	"net/http"
-	"os"
+	"net/url"
 	"strings"
-	"sync"
+	"time"
 
-	"github.com/olekukonko/tablewriter"
-
+	"github.com/ibnaleem/gosearch/internal/config"
+	"github.com/ibnaleem/gosearch/internal/file"
+	"github.com/ibnaleem/gosearch/internal/modules"
 	"github.com/ibnaleem/gosearch/internal/theme"
-	"github.com/ibnaleem/gosearch/internal/utils"
 )
 
-type ProxyNova struct {
+type proxyNovaClient struct {
+	fileWriter *file.FileWriter
+	httpClient *http.Client
+}
+
+func NewProxyNovaClient(fileWriter *file.FileWriter) modules.Module {
+	httpClient := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: config.TLSConfig,
+			Proxy:           http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+	}
+
+	return &proxyNovaClient{
+		fileWriter: fileWriter,
+		httpClient: httpClient,
+	}
+}
+
+func (x *proxyNovaClient) Name() string {
+	return "ProxyNova"
+}
+
+func (x *proxyNovaClient) Search(ctx context.Context, query string) (*modules.Result, error) {
+	theme.Cyan("[*] Searching ", query, " on ProxyNova for any compromised passwords...").Println()
+	response, err := x.buildRequest(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	if response.Count == 0 {
+		theme.Red("[-] No compromised passwords found for ", query, ".").Println()
+		return nil, nil
+	}
+
+	var buffer strings.Builder
+
+	theme.Greenf("[+] Found %d compromised passwords for %s:", len(response.Lines), query).Println()
+	fmt.Fprintf(&buffer, "[+] Found %d compromised passwords for %s:\n", len(response.Lines), query)
+
+	for index, entry := range response.Lines {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+
+		parts := strings.SplitN(entry, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		theme.Greenf(":: %03d :: %-8s : %s", index+1, "Email", parts[0]).Println()
+		theme.Greenf("          %-8s : %s", "Password", parts[1]).Println()
+
+		fmt.Fprintf(&buffer, ":: %03d :: %-8s : %s\n", index+1, "Email", parts[0])
+		fmt.Fprintf(&buffer, "          %-8s : %s\n", "Password", parts[1])
+	}
+
+	if err := x.fileWriter.Write(query, buffer.String()); err != nil {
+		theme.Redf("[!] Could not write output file: %v", err).Println()
+	}
+
+	result := modules.Result{
+		Module:  x.Name(),
+		Summary: fmt.Sprintf("%d compromised password(s) found", response.Count),
+	}
+
+	return &result, nil
+}
+
+type proxyNovaResponse struct {
 	Count int      `json:"count"`
 	Lines []string `json:"lines"`
 }
 
-func SearchProxyNova(username string, wg *sync.WaitGroup) {
-	defer wg.Done()
+func (x *proxyNovaClient) buildRequest(ctx context.Context, param any) (*proxyNovaResponse, error) {
+	endpoint := fmt.Sprintf("https://api.proxynova.com/comb?query=%s", url.QueryEscape(fmt.Sprint(param)))
 
-	theme.Yellow("[*] Searching ", username, " on ProxyNova for any compromised passwords...").Println()
-
-	client := &http.Client{}
-
-	req, err := http.NewRequest(http.MethodGet, "https://api.proxynova.com/comb?query="+username, nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		fmt.Printf("Error creating request: %v\n", err)
-		return
+		return nil, fmt.Errorf("%s(buildRequest): create request: %w", x.Name(), err)
 	}
 
-	resp, err := client.Do(req)
+	request.Header.Set("User-Agent", config.DefaultUserAgent)
+	request.Header.Set("Accept", "application/json")
+
+	response, err := x.httpClient.Do(request)
 	if err != nil {
-		fmt.Printf("Error sending request: %v\n", err)
-		return
+		return nil, fmt.Errorf("%s(buildRequest): send request: %w", x.Name(), err)
 	}
-	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	defer response.Body.Close()
+
+	if err := modules.CheckStatus(x.Name(), "buildRequest", response.StatusCode); err != nil {
+		return nil, err
+	}
+
+	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		fmt.Println("Error reading response in SearchProxyNova function:", err)
-		return
+		return nil, fmt.Errorf("%s(buildRequest): read response: %w", x.Name(), err)
 	}
 
-	var response ProxyNova
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		fmt.Println("Error parsing JSON in SearchProxyNova function:", err)
-		return
+	var proxyNovaResponse proxyNovaResponse
+	if err := json.Unmarshal(body, &proxyNovaResponse); err != nil {
+		return nil, fmt.Errorf("%s(buildRequest): decode response: %w", x.Name(), err)
 	}
 
-	if response.Count > 0 {
-		table := tablewriter.NewTable(os.Stdout)
-		table.Header("No", "Email", "Password")
-		theme.Greenf("[+] Found %d compromised passwords for %s:\n", response.Count, username).Println()
-		for i, element := range response.Lines {
-			parts := strings.Split(element, ":")
-			if len(parts) == 2 {
-				email := parts[0]
-				password := parts[1]
-				table.Append(i+1, theme.Green(email), theme.Red(password))
-				utils.WriteToFile(username, "[+] Email: "+email+"\n"+"[+] Password: "+password+"\n\n")
-			}
-		}
-		if err := table.Render(); err != nil {
-			log.Printf("table render failed: %v", err)
-		}
-	} else {
-		theme.Red("[-] No compromised passwords found for ", username, ".").Println()
-	}
+	return &proxyNovaResponse, nil
+
 }
