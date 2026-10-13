@@ -76,7 +76,7 @@ func main() {
 	clients = append(clients, hudsonrock.NewHudsonRockClient(fileWriter))
 	clients = append(clients, keybase.NewKeyBaseClient(fileWriter))
 	clients = append(clients, proxynova.NewProxyNovaClient(fileWriter))
-	clients = append(clients, github.NewGithubClient(fileWriter))
+	clients = append(clients, github.NewGitHubClient(fileWriter))
 	clients = append(clients, breachdirectory.NewBreachDirectoryClient(fileWriter, breachDirectoryAPIKey))
 	clients = append(clients, search.NewSearchClient(fileWriter, noFalsePositive))
 

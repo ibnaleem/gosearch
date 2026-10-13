@@ -25,7 +25,7 @@ type keyBaseClient struct {
 
 type keyBaseResponse struct {
 	Status keyBaseStatus `json:"status"`
-	Users []keyBaseUser `json:"them"`
+	Users  []keyBaseUser `json:"them"`
 }
 
 type keyBaseStatus struct {

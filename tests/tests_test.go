@@ -116,7 +116,7 @@ func TestModuleNames(t *testing.T) {
 		{hudsonrock.NewHudsonRockClient(fw), "HudsonRock"},
 		{keybase.NewKeyBaseClient(fw), "KeyBase"},
 		{proxynova.NewProxyNovaClient(fw), "ProxyNova"},
-		{github.NewGithubClient(fw), "Github"},
+		{github.NewGitHubClient(fw), "Github"},
 		{breachdirectory.NewBreachDirectoryClient(fw, ""), "BreachDirectory"},
 		{search.NewSearchClient(fw, false), "Search"},
 	}
