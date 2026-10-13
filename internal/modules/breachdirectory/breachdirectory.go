@@ -77,7 +77,7 @@ func (bdc *breachDirectoryClient) Search(ctx context.Context, query string) (*mo
 	}
 
 	if bdc.apiKey == "" {
-		theme.Yellow("[!] Skipping Breach Directory: no API key provided (use -bdc <key>).").Println()
+		theme.Yellow("[!] Skipping Breach Directory: no API key provided (use -bd <key>).").Println()
 		return nil, nil
 	}
 
@@ -172,6 +172,10 @@ func (bdc *breachDirectoryClient) buildRequest(ctx context.Context, param any) (
 }
 
 func (bdc *breachDirectoryClient) crackHashViaWeakpass(ctx context.Context, hash string) (string, error) {
+	if hash == "" {
+		return "", nil
+	}
+
 	endpoint := fmt.Sprintf("https://weakpass.com/api/v1/search/%s.json", url.PathEscape(hash))
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
@@ -189,8 +193,12 @@ func (bdc *breachDirectoryClient) crackHashViaWeakpass(ctx context.Context, hash
 
 	defer response.Body.Close()
 
-	if response.StatusCode == http.StatusForbidden {
+	switch {
+	case response.StatusCode == http.StatusForbidden || response.StatusCode == http.StatusNotFound:
+		// 403 (rate limited) and 404 (hash not in Weakpass) just mean "not cracked".
 		return "", nil
+	case response.StatusCode < 200 || response.StatusCode >= 300:
+		return "", fmt.Errorf("%s(crackHashViaWeakpass): unexpected status %d", bdc.Name(), response.StatusCode)
 	}
 
 	body, err := io.ReadAll(response.Body)
