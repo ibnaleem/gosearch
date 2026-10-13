@@ -37,10 +37,10 @@ func init() {
 
 	flag.StringVar(&username, "u", "", "Username to search")
 	flag.StringVar(&username, "username", "", "Username to search")
-	
+
 	flag.StringVar(&outputPath, "o", ".", "Directory to save the output files (default: current directory)")
 	flag.StringVar(&outputPath, "output", ".", "Directory to save the output files (default: current directory)")
-	
+
 	flag.StringVar(&breachDirectoryAPIKey, "bd", "", "Search Breach Directory with an API Key")
 	flag.StringVar(&breachDirectoryAPIKey, "breach-directory", "", "Search Breach Directory with an API Key")
 
