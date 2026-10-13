@@ -130,7 +130,7 @@ func (gc *gravatarClient) Search(ctx context.Context, query string) (*modules.Re
 			fmt.Fprintf(&buffer, "          You could also submit this hash to Hashmob.net if you cannot crack it\n")
 		}
 
-		if len(entry.Emails) > 1 {
+		if len(entry.Emails) > 0 {
 			theme.Greenf("[+] Email(s) found for %s:", entry.Username).Println()
 			fmt.Fprintf(&buffer, "[+] Email(s) found for %s:\n", entry.Username)
 			for _, email := range entry.Emails {
