@@ -27,9 +27,9 @@ import (
 
 var (
 	username              string
-	noFalsePositive       bool
-	breachDirectoryAPIKey string
 	outputPath            string
+	breachDirectoryAPIKey string
+	noFalsePositive       bool
 )
 
 func init() {
@@ -37,15 +37,15 @@ func init() {
 
 	flag.StringVar(&username, "u", "", "Username to search")
 	flag.StringVar(&username, "username", "", "Username to search")
-
-	flag.BoolVar(&noFalsePositive, "nfp", false, "Do not show false positives")
-	flag.BoolVar(&noFalsePositive, "no-false-positives", false, "Do not show false positives")
-
+	
+	flag.StringVar(&outputPath, "o", ".", "Directory to save the output files (default: current directory)")
+	flag.StringVar(&outputPath, "output", ".", "Directory to save the output files (default: current directory)")
+	
 	flag.StringVar(&breachDirectoryAPIKey, "bd", "", "Search Breach Directory with an API Key")
 	flag.StringVar(&breachDirectoryAPIKey, "breach-directory", "", "Search Breach Directory with an API Key")
 
-	flag.StringVar(&outputPath, "o", ".", "Directory to save the output files (default: current directory)")
-	flag.StringVar(&outputPath, "output", ".", "Directory to save the output files (default: current directory)")
+	flag.BoolVar(&noFalsePositive, "nfp", false, "Do not show false positives")
+	flag.BoolVar(&noFalsePositive, "no-false-positives", false, "Do not show false positives")
 
 	flag.Parse()
 }

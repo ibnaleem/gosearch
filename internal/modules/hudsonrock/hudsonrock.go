@@ -22,6 +22,25 @@ type hudsonRockClient struct {
 	httpClient *http.Client
 }
 
+type hudsonRockResponse struct {
+	Message  string    `json:"message"`
+	Stealers []stealer `json:"stealers"`
+}
+
+type stealer struct {
+	TotalCorporateServices int      `json:"total_corporate_services"`
+	TotalUserServices      int      `json:"total_user_services"`
+	DateCompromised        string   `json:"date_compromised"`
+	StealerFamily          string   `json:"stealer_family"`
+	ComputerName           string   `json:"computer_name"`
+	OperatingSystem        string   `json:"operating_system"`
+	MalwarePath            string   `json:"malware_path"`
+	Antiviruses            any      `json:"antiviruses"`
+	IP                     string   `json:"ip"`
+	TopPasswords           []string `json:"top_passwords"`
+	TopLogins              []string `json:"top_logins"`
+}
+
 func NewHudsonRockClient(fileWriter *file.FileWriter) modules.Module {
 	httpClient := &http.Client{
 		Timeout: 30 * time.Second,
@@ -45,14 +64,14 @@ func NewHudsonRockClient(fileWriter *file.FileWriter) modules.Module {
 	}
 }
 
-func (x *hudsonRockClient) Name() string {
+func (hrc *hudsonRockClient) Name() string {
 	return "HudsonRock"
 }
 
-func (x *hudsonRockClient) Search(ctx context.Context, query string) (*modules.Result, error) {
+func (hrc *hudsonRockClient) Search(ctx context.Context, query string) (*modules.Result, error) {
 	theme.Cyanf("[*] Searching %s on HudsonRock...", query).Println()
 
-	response, err := x.buildRequest(ctx, query)
+	response, err := hrc.buildRequest(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -97,67 +116,48 @@ func (x *hudsonRockClient) Search(ctx context.Context, query string) (*modules.R
 		fmt.Fprintf(&buffer, "          %-18s : %s\n", "Top Logins", strings.Join(entry.TopLogins, ", "))
 	}
 
-	if err := x.fileWriter.Write(query, buffer.String()); err != nil {
+	if err := hrc.fileWriter.Write(query, buffer.String()); err != nil {
 		theme.Redf("[!] Could not write output file: %v", err).Println()
 	}
 
 	result := modules.Result{
-		Module:  x.Name(),
+		Module:  hrc.Name(),
 		Summary: fmt.Sprintf("%d infection(s) found", len(response.Stealers)),
 	}
 
 	return &result, nil
 }
 
-type hudsonRockResponse struct {
-	Message  string    `json:"message"`
-	Stealers []stealer `json:"stealers"`
-}
-
-type stealer struct {
-	TotalCorporateServices int      `json:"total_corporate_services"`
-	TotalUserServices      int      `json:"total_user_services"`
-	DateCompromised        string   `json:"date_compromised"`
-	StealerFamily          string   `json:"stealer_family"`
-	ComputerName           string   `json:"computer_name"`
-	OperatingSystem        string   `json:"operating_system"`
-	MalwarePath            string   `json:"malware_path"`
-	Antiviruses            any      `json:"antiviruses"`
-	IP                     string   `json:"ip"`
-	TopPasswords           []string `json:"top_passwords"`
-	TopLogins              []string `json:"top_logins"`
-}
-
-func (x *hudsonRockClient) buildRequest(ctx context.Context, param any) (*hudsonRockResponse, error) {
+func (hrc *hudsonRockClient) buildRequest(ctx context.Context, param any) (*hudsonRockResponse, error) {
 	endpoint := fmt.Sprintf("https://cavalier.hudsonrock.com/api/json/v2/osint-tools/search-by-username?username=%s", url.QueryEscape(fmt.Sprint(param)))
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): create request: %w", x.Name(), err)
+		return nil, fmt.Errorf("%s(buildRequest): create request: %w", hrc.Name(), err)
 	}
 
 	request.Header.Set("User-Agent", config.DefaultUserAgent)
 	request.Header.Set("Accept", "application/json")
 
-	response, err := x.httpClient.Do(request)
+	response, err := hrc.httpClient.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): send request: %w", x.Name(), err)
+		return nil, fmt.Errorf("%s(buildRequest): send request: %w", hrc.Name(), err)
 	}
 
 	defer response.Body.Close()
 
-	if err := modules.CheckStatus(x.Name(), "buildRequest", response.StatusCode); err != nil {
+	if err := modules.CheckStatus(hrc.Name(), "buildRequest", response.StatusCode); err != nil {
 		return nil, err
 	}
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): read response: %w", x.Name(), err)
+		return nil, fmt.Errorf("%s(buildRequest): read response: %w", hrc.Name(), err)
 	}
 
 	var hudsonRockResponse hudsonRockResponse
 	if err := json.Unmarshal(body, &hudsonRockResponse); err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): decode response: %w", x.Name(), err)
+		return nil, fmt.Errorf("%s(buildRequest): decode response: %w", hrc.Name(), err)
 	}
 
 	return &hudsonRockResponse, nil

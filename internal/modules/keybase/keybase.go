@@ -23,6 +23,76 @@ type keyBaseClient struct {
 	httpClient *http.Client
 }
 
+type keyBaseResponse struct {
+	Status keyBaseStatus `json:"status"`
+	Users []keyBaseUser `json:"them"`
+}
+
+type keyBaseStatus struct {
+	Code int    `json:"code"`
+	Name string `json:"name"`
+}
+
+type keyBaseUser struct {
+	ID                      string                      `json:"id"`
+	Basics                  keyBaseBasics               `json:"basics"`
+	Profile                 keyBaseProfile              `json:"profile"`
+	Pictures                keyBasePictures             `json:"pictures"`
+	Stellar                 keyBaseStellar              `json:"stellar"`
+	Devices                 map[string]keyBaseDevice    `json:"devices"`
+	CryptocurrencyAddresses map[string][]keyBaseAddress `json:"cryptocurrency_addresses"`
+	ProofsSummary           keyBaseProofsSummary        `json:"proofs_summary"`
+}
+
+type keyBaseBasics struct {
+	Username      string `json:"username"`
+	Ctime         int64  `json:"ctime"`
+	Mtime         int64  `json:"mtime"`
+	UsernameCased string `json:"username_cased"`
+}
+
+type keyBaseProfile struct {
+	FullName string `json:"full_name"`
+	Location string `json:"location"`
+	Bio      string `json:"bio"`
+}
+
+type keyBasePictures struct {
+	Primary *keyBasePicture `json:"primary"`
+}
+
+type keyBasePicture struct {
+	URL string `json:"url"`
+}
+
+type keyBaseStellar struct {
+	Hidden  bool                   `json:"hidden"`
+	Primary *keyBaseStellarAccount `json:"primary"`
+}
+
+type keyBaseStellarAccount struct {
+	AccountID string `json:"account_id"`
+}
+
+type keyBaseDevice struct {
+	Type string `json:"type"`
+	Name string `json:"name"`
+}
+
+type keyBaseAddress struct {
+	Address string `json:"address"`
+}
+
+type keyBaseProofsSummary struct {
+	All []keyBaseProof `json:"all"`
+}
+
+type keyBaseProof struct {
+	ProofType  string `json:"proof_type"`
+	Nametag    string `json:"nametag"`
+	ServiceURL string `json:"service_url"`
+}
+
 func NewKeyBaseClient(fileWriter *file.FileWriter) modules.Module {
 	httpClient := &http.Client{
 		Timeout: 30 * time.Second,
@@ -46,25 +116,25 @@ func NewKeyBaseClient(fileWriter *file.FileWriter) modules.Module {
 	}
 }
 
-func (x *keyBaseClient) Name() string {
+func (kbc *keyBaseClient) Name() string {
 	return "KeyBase"
 }
 
-func (x *keyBaseClient) Search(ctx context.Context, query string) (*modules.Result, error) {
+func (kbc *keyBaseClient) Search(ctx context.Context, query string) (*modules.Result, error) {
 	theme.Cyanf("[*] Searching %s on Keybase...", query).Println()
-	response, err := x.buildRequest(ctx, query)
+	response, err := kbc.buildRequest(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(response.Them) == 0 {
+	if len(response.Users) == 0 {
 		theme.Red("[-] No Keybase profile found for ", query).Println()
 		return nil, nil
 	}
 
 	var buffer strings.Builder
 
-	for index, entry := range response.Them {
+	for index, entry := range response.Users {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
 		}
@@ -173,118 +243,52 @@ func (x *keyBaseClient) Search(ctx context.Context, query string) (*modules.Resu
 		}
 	}
 
-	if err := x.fileWriter.Write(query, buffer.String()); err != nil {
+	if err := kbc.fileWriter.Write(query, buffer.String()); err != nil {
 		theme.Redf("[!] Could not write output file: %v", err).Println()
 	}
 
 	result := modules.Result{
-		Module:  x.Name(),
-		Summary: fmt.Sprintf("%d profile(s) found", len(response.Them)),
+		Module:  kbc.Name(),
+		Summary: fmt.Sprintf("%d profile(s) found", len(response.Users)),
 	}
 
 	return &result, nil
 }
 
-type keyBaseResponse struct {
-	Status keyBaseStatus `json:"status"`
-	Them   []keyBaseThem `json:"them"`
-}
-
-type keyBaseStatus struct {
-	Code int    `json:"code"`
-	Name string `json:"name"`
-}
-
-type keyBaseThem struct {
-	ID                      string                      `json:"id"`
-	Basics                  keyBaseBasics               `json:"basics"`
-	Profile                 keyBaseProfile              `json:"profile"`
-	Pictures                keyBasePictures             `json:"pictures"`
-	Stellar                 keyBaseStellar              `json:"stellar"`
-	Devices                 map[string]keyBaseDevice    `json:"devices"`
-	CryptocurrencyAddresses map[string][]keyBaseAddress `json:"cryptocurrency_addresses"`
-	ProofsSummary           keyBaseProofsSummary        `json:"proofs_summary"`
-}
-
-type keyBaseBasics struct {
-	Username      string `json:"username"`
-	Ctime         int64  `json:"ctime"`
-	Mtime         int64  `json:"mtime"`
-	UsernameCased string `json:"username_cased"`
-}
-
-type keyBaseProfile struct {
-	FullName string `json:"full_name"`
-	Location string `json:"location"`
-	Bio      string `json:"bio"`
-}
-
-type keyBasePictures struct {
-	Primary *keyBasePicture `json:"primary"`
-}
-
-type keyBasePicture struct {
-	URL string `json:"url"`
-}
-
-type keyBaseStellar struct {
-	Hidden  bool                   `json:"hidden"`
-	Primary *keyBaseStellarAccount `json:"primary"`
-}
-
-type keyBaseStellarAccount struct {
-	AccountID string `json:"account_id"`
-}
-
-type keyBaseDevice struct {
-	Type string `json:"type"`
-	Name string `json:"name"`
-}
-
-type keyBaseAddress struct {
-	Address string `json:"address"`
-}
-
-type keyBaseProofsSummary struct {
-	All []keyBaseProof `json:"all"`
-}
-
-type keyBaseProof struct {
-	ProofType  string `json:"proof_type"`
-	Nametag    string `json:"nametag"`
-	ServiceURL string `json:"service_url"`
-}
-
-func (x *keyBaseClient) buildRequest(ctx context.Context, query any) (*keyBaseResponse, error) {
+func (kbc *keyBaseClient) buildRequest(ctx context.Context, query any) (*keyBaseResponse, error) {
 	endpoint := fmt.Sprintf("https://keybase.io/_/api/1.0/user/lookup.json?usernames=%s", url.QueryEscape(fmt.Sprint(query)))
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): create request: %w", x.Name(), err)
+		return nil, fmt.Errorf("%s(buildRequest): create request: %w", kbc.Name(), err)
 	}
 
 	request.Header.Set("User-Agent", config.DefaultUserAgent)
 	request.Header.Set("Accept", "application/json")
 
-	response, err := x.httpClient.Do(request)
+	response, err := kbc.httpClient.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): send request: %w", x.Name(), err)
+		return nil, fmt.Errorf("%s(buildRequest): send request: %w", kbc.Name(), err)
 	}
 
 	defer response.Body.Close()
 
-	if err := modules.CheckStatus(x.Name(), "buildRequest", response.StatusCode); err != nil {
+	if err := modules.CheckStatus(kbc.Name(), "buildRequest", response.StatusCode); err != nil {
 		return nil, err
 	}
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): read response: %w", x.Name(), err)
+		return nil, fmt.Errorf("%s(buildRequest): read response: %w", kbc.Name(), err)
 	}
 
 	var keyBaseResponse keyBaseResponse
 	if err := json.Unmarshal(body, &keyBaseResponse); err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): decode response: %w", x.Name(), err)
+		return nil, fmt.Errorf("%s(buildRequest): decode response: %w", kbc.Name(), err)
+	}
+
+	if keyBaseResponse.Status.Code != 0 {
+		return nil, fmt.Errorf("%s(buildRequest): api status %d (%s)", kbc.Name(), keyBaseResponse.Status.Code, keyBaseResponse.Status.Name)
 	}
 
 	return &keyBaseResponse, nil

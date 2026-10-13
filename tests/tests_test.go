@@ -1,7 +1,9 @@
 package tests
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -49,6 +51,7 @@ func TestFileWriterAppendsWithinOneRun(t *testing.T) {
 	if err := fw.Write("user", "a\n"); err != nil {
 		t.Fatalf("first write: %v", err)
 	}
+
 	if err := fw.Write("user", "b\n"); err != nil {
 		t.Fatalf("second write: %v", err)
 	}
@@ -57,6 +60,7 @@ func TestFileWriterAppendsWithinOneRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(entries) != 1 {
 		t.Fatalf("want 1 file within one run, got %d", len(entries))
 	}
@@ -65,6 +69,7 @@ func TestFileWriterAppendsWithinOneRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if got := string(body); got != "a\nb\n" {
 		t.Fatalf("want appended content %q, got %q", "a\nb\n", got)
 	}
@@ -82,6 +87,7 @@ func TestFileWriterNamesFilePerRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(entries) != 1 {
 		t.Fatalf("want 1 file, got %d", len(entries))
 	}
@@ -119,5 +125,62 @@ func TestModuleNames(t *testing.T) {
 		if got := c.module.Name(); got != c.want {
 			t.Errorf("Name() = %q, want %q", got, c.want)
 		}
+	}
+}
+
+// The two tests below lock in why the username-in-path modules (e.g. gravatar)
+// build their endpoints with url.PathEscape. The username comes from user input
+// and is placed into a URL path segment (/{username}.json); without escaping, a
+// URL-special character either breaks the request or silently redirects it.
+//
+// They mirror the exact construction used in buildRequest rather than calling it,
+// since buildRequest is unexported and performs a network request.
+
+func TestPathEscapeKeepsUsernameInPathSegment(t *testing.T) {
+	cases := []string{"100%", "foo#bar", "foo?bar", "a/b"}
+
+	for _, in := range cases {
+		t.Run(in, func(t *testing.T) {
+			endpoint := fmt.Sprintf("https://gravatar.com/%s.json", url.PathEscape(in))
+
+			req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+			if err != nil {
+				t.Fatalf("escaped URL failed to build for %q: %v", in, err)
+			}
+
+			if req.URL.RawQuery != "" || req.URL.Fragment != "" {
+				t.Fatalf("username leaked for %q: query=%q fragment=%q", in, req.URL.RawQuery, req.URL.Fragment)
+			}
+
+			if want := "/" + in + ".json"; req.URL.Path != want {
+				t.Fatalf("path = %q, want %q", req.URL.Path, want)
+			}
+		})
+	}
+}
+
+func TestPlainConcatBreaksOnSpecialChars(t *testing.T) {
+	// With a naive fmt.Sprintf (no escaping) each of these is wrong: the request
+	// either fails to build or the username leaks out of the path.
+	cases := []string{"100%", "foo#bar", "foo?bar"}
+
+	for _, in := range cases {
+		t.Run(in, func(t *testing.T) {
+			endpoint := fmt.Sprintf("https://gravatar.com/%s.json", in)
+
+			req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+			if err != nil {
+				return // e.g. "100%" fails to parse — exactly the bug PathEscape avoids
+			}
+
+			leaked := req.URL.RawQuery != "" ||
+				req.URL.Fragment != "" ||
+				req.URL.Path != "/"+in+".json"
+
+			if !leaked {
+				t.Fatalf("expected naive URL for %q to be malformed, got path=%q query=%q fragment=%q",
+					in, req.URL.Path, req.URL.RawQuery, req.URL.Fragment)
+			}
+		})
 	}
 }

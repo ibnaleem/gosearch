@@ -27,6 +27,28 @@ type searchClient struct {
 	noFalsePositive      bool
 }
 
+type cookie struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+type website struct {
+	Name            string   `json:"name"`
+	BaseURL         string   `json:"base_url"`
+	URLProbe        string   `json:"url_probe,omitempty"`
+	FollowRedirects bool     `json:"follow_redirects"`
+	UserAgent       string   `json:"user_agent,omitempty"`
+	ErrorType       string   `json:"errorType"`
+	ErrorMsg        string   `json:"errorMsg,omitempty"`
+	ErrorCode       int      `json:"errorCode,omitempty"`
+	ResponseURL     string   `json:"response_url,omitempty"`
+	Cookies         []cookie `json:"cookies,omitempty"`
+}
+
+type resource struct {
+	Websites []website `json:"websites"`
+}
+
 func NewSearchClient(fileWriter *file.FileWriter, noFalsePositive bool) modules.Module {
 	httpClient := &http.Client{
 		Timeout: 30 * time.Second,
@@ -57,19 +79,19 @@ func NewSearchClient(fileWriter *file.FileWriter, noFalsePositive bool) modules.
 	}
 }
 
-func (x *searchClient) Name() string {
+func (sc *searchClient) Name() string {
 	return "Search"
 }
 
-func (x *searchClient) Search(ctx context.Context, query string) (*modules.Result, error) {
-	domains, err := x.searchDomain(ctx, query)
+func (sc *searchClient) Search(ctx context.Context, query string) (*modules.Result, error) {
+	domains, err := sc.searchDomain(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("%s(searchDomain): search domain: %w", x.Name(), err)
+		return nil, fmt.Errorf("%s(searchDomain): search domain: %w", sc.Name(), err)
 	}
 
-	sites, err := x.searchSite(ctx, query)
+	sites, err := sc.searchSite(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("%s(searchSite): search site: %w", x.Name(), err)
+		return nil, fmt.Errorf("%s(searchSite): search site: %w", sc.Name(), err)
 	}
 
 	var buffer strings.Builder
@@ -88,19 +110,19 @@ func (x *searchClient) Search(ctx context.Context, query string) (*modules.Resul
 		}
 	}
 
-	if err := x.fileWriter.Write(query, buffer.String()); err != nil {
+	if err := sc.fileWriter.Write(query, buffer.String()); err != nil {
 		theme.Redf("[!] Could not write output file: %v", err).Println()
 	}
 
 	result := modules.Result{
-		Module:  x.Name(),
+		Module:  sc.Name(),
 		Summary: fmt.Sprintf("%d domain(s), %d site(s) found", len(domains), len(sites)),
 	}
 
 	return &result, nil
 }
 
-func (x *searchClient) searchDomain(ctx context.Context, query string) ([]string, error) {
+func (sc *searchClient) searchDomain(ctx context.Context, query string) ([]string, error) {
 	domains, err := buildDomains(query)
 	if err != nil {
 		return nil, err
@@ -135,7 +157,7 @@ func (x *searchClient) searchDomain(ctx context.Context, query string) ([]string
 			request.Header.Set("Sec-Fetch-User", "?1")
 			request.Header.Set("Cache-Control", "max-age=0")
 
-			response, err := x.noRedirectHTTPClient.Do(request)
+			response, err := sc.noRedirectHTTPClient.Do(request)
 			if err != nil {
 				var opErr *net.OpError
 				if errors.As(err, &opErr) && opErr.Op == "dial" {
@@ -199,7 +221,7 @@ func buildDomains(field string) ([]string, error) {
 	return domains, nil
 }
 
-func (x *searchClient) searchSite(ctx context.Context, query string) ([]string, error) {
+func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string, error) {
 	sites, err := buildResources(ctx)
 	if err != nil {
 		return nil, err
@@ -224,7 +246,7 @@ func (x *searchClient) searchSite(ctx context.Context, query string) ([]string, 
 			}
 
 			if site.ErrorType == "unknown" {
-				if !x.noFalsePositive {
+				if !sc.noFalsePositive {
 					mu.Lock()
 					uncertainSites = append(uncertainSites, url)
 					mu.Unlock()
@@ -267,9 +289,9 @@ func (x *searchClient) searchSite(ctx context.Context, query string) ([]string, 
 				request.AddCookie(&http.Cookie{Name: cookie.Name, Value: cookie.Value})
 			}
 
-			httpClient := x.httpClient
+			httpClient := sc.httpClient
 			if !site.FollowRedirects {
-				httpClient = x.noRedirectHTTPClient
+				httpClient = sc.noRedirectHTTPClient
 			}
 
 			response, err := httpClient.Do(request)
@@ -349,28 +371,6 @@ func (x *searchClient) searchSite(ctx context.Context, query string) ([]string, 
 	}
 
 	return foundSites, nil
-}
-
-type cookie struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
-}
-
-type website struct {
-	Name            string   `json:"name"`
-	BaseURL         string   `json:"base_url"`
-	URLProbe        string   `json:"url_probe,omitempty"`
-	FollowRedirects bool     `json:"follow_redirects"`
-	UserAgent       string   `json:"user_agent,omitempty"`
-	ErrorType       string   `json:"errorType"`
-	ErrorMsg        string   `json:"errorMsg,omitempty"`
-	ErrorCode       int      `json:"errorCode,omitempty"`
-	ResponseURL     string   `json:"response_url,omitempty"`
-	Cookies         []cookie `json:"cookies,omitempty"`
-}
-
-type resource struct {
-	Websites []website `json:"websites"`
 }
 
 func buildResources(ctx context.Context) (*resource, error) {

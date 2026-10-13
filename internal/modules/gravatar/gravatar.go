@@ -23,6 +23,32 @@ type gravatarClient struct {
 	httpClient *http.Client
 }
 
+var errGravatarUserNotFound = errors.New("gravatar: user not found")
+
+type gravatarResponse struct {
+	Entry []gravatarUser `json:"entry"`
+}
+
+type gravatarUser struct {
+	EmailHash         string                 `json:"hash"`
+	Username          string                 `json:"requestHash"`
+	PreferredUsername string                 `json:"preferredUsername"`
+	DisplayName       string                 `json:"displayName"`
+	AboutMe           string                 `json:"aboutMe"`
+	Emails            []gravatarUserEmails   `json:"emails"`
+	Accounts          []gravatarUserAccounts `json:"accounts"`
+}
+
+type gravatarUserEmails struct {
+	Email string `json:"value"`
+}
+
+type gravatarUserAccounts struct {
+	URL      string `json:"url"`
+	Username string `json:"username"`
+	Name     string `json:"name"`
+}
+
 func NewGravatarClient(fileWriter *file.FileWriter) modules.Module {
 	httpClient := &http.Client{
 		Timeout: 30 * time.Second,
@@ -46,14 +72,14 @@ func NewGravatarClient(fileWriter *file.FileWriter) modules.Module {
 	}
 }
 
-func (x *gravatarClient) Name() string {
+func (gc *gravatarClient) Name() string {
 	return "Gravatar"
 }
 
-func (x *gravatarClient) Search(ctx context.Context, query string) (*modules.Result, error) {
+func (gc *gravatarClient) Search(ctx context.Context, query string) (*modules.Result, error) {
 	theme.Cyanf("[*] Searching %s on Gravatar...", query).Println()
 
-	response, err := x.buildRequest(ctx, query)
+	response, err := gc.buildRequest(ctx, query)
 	if err != nil {
 		if errors.Is(err, errGravatarUserNotFound) {
 			theme.Redf("[-] No Gravatar profile found for %s", query).Println()
@@ -130,69 +156,43 @@ func (x *gravatarClient) Search(ctx context.Context, query string) (*modules.Res
 		}
 	}
 
-	if err := x.fileWriter.Write(query, buffer.String()); err != nil {
+	if err := gc.fileWriter.Write(query, buffer.String()); err != nil {
 		theme.Redf("[!] Could not write output file: %v", err).Println()
 	}
 
 	result := modules.Result{
-		Module:  x.Name(),
+		Module:  gc.Name(),
 		Summary: fmt.Sprintf("%d profile(s) found", len(response.Entry)),
 	}
 
 	return &result, nil
 }
 
-var errGravatarUserNotFound = errors.New("gravatar: user not found")
-
-type gravatarResponse struct {
-	Entry []gravatarUser `json:"entry"`
-}
-
-type gravatarUser struct {
-	EmailHash         string                 `json:"hash"`
-	Username          string                 `json:"requestHash"`
-	PreferredUsername string                 `json:"preferredUsername"`
-	DisplayName       string                 `json:"displayName"`
-	AboutMe           string                 `json:"aboutMe"`
-	Emails            []gravatarUserEmails   `json:"emails"`
-	Accounts          []gravatarUserAccounts `json:"accounts"`
-}
-
-type gravatarUserEmails struct {
-	Email string `json:"value"`
-}
-
-type gravatarUserAccounts struct {
-	URL      string `json:"url"`
-	Username string `json:"username"`
-	Name     string `json:"name"`
-}
-
-func (x *gravatarClient) buildRequest(ctx context.Context, param any) (*gravatarResponse, error) {
+func (gc *gravatarClient) buildRequest(ctx context.Context, param any) (*gravatarResponse, error) {
 	endpoint := fmt.Sprintf("https://gravatar.com/%s.json", url.PathEscape(fmt.Sprint(param)))
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): create request: %w", x.Name(), err)
+		return nil, fmt.Errorf("%s(buildRequest): create request: %w", gc.Name(), err)
 	}
 
 	request.Header.Set("User-Agent", config.DefaultUserAgent)
 	request.Header.Set("Accept", "application/json")
 
-	response, err := x.httpClient.Do(request)
+	response, err := gc.httpClient.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): send request: %w", x.Name(), err)
+		return nil, fmt.Errorf("%s(buildRequest): send request: %w", gc.Name(), err)
 	}
 
 	defer response.Body.Close()
 
-	if err := modules.CheckStatus(x.Name(), "buildRequest", response.StatusCode); err != nil {
+	if err := modules.CheckStatus(gc.Name(), "buildRequest", response.StatusCode); err != nil {
 		return nil, err
 	}
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): read response: %w", x.Name(), err)
+		return nil, fmt.Errorf("%s(buildRequest): read response: %w", gc.Name(), err)
 	}
 
 	if strings.TrimSpace(string(body)) == `"User not found"` {
@@ -201,7 +201,7 @@ func (x *gravatarClient) buildRequest(ctx context.Context, param any) (*gravatar
 
 	var gravatarResponse gravatarResponse
 	if err := json.Unmarshal(body, &gravatarResponse); err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): decode response: %w", x.Name(), err)
+		return nil, fmt.Errorf("%s(buildRequest): decode response: %w", gc.Name(), err)
 	}
 
 	return &gravatarResponse, nil
