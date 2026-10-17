@@ -6,8 +6,10 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -75,11 +77,52 @@ func WriteEmailToFile(username string, email string) {
 	}
 }
 
+// a username used as a subdomain must be a single DNS label (RFC 1123)
+var dnsLabel = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
+
+// placeholderInHost reports whether {} sits in the hostname, e.g. https://{}.tumblr.com
+func placeholderInHost(baseURL string) bool {
+	i := strings.Index(baseURL, "{}")
+	if i < 0 {
+		return false
+	}
+	hostStart := strings.Index(baseURL, "://") + len("://")
+	hostEnd := strings.IndexAny(baseURL[hostStart:], "/?#")
+	return hostEnd < 0 || i < hostStart+hostEnd
+}
+
+// CanBuildURL reports whether username can be safely put into baseURL.
+// Path and query placeholders can always be escaped; hostnames cannot.
+func CanBuildURL(baseURL, username string) bool {
+	return !placeholderInHost(baseURL) || dnsLabel.MatchString(username)
+}
+
+// BuildURL substitutes username into the {} placeholder, escaped for the
+// part of the URL it lands in. Hostname placeholders are left raw, so
+// callers must check CanBuildURL first.
 func BuildURL(baseURL, username string) string {
-	return strings.Replace(baseURL, "{}", username, 1)
+	before, after, found := strings.Cut(baseURL, "{}")
+	if !found {
+		return baseURL
+	}
+
+	escaped := username
+	switch {
+	case placeholderInHost(baseURL):
+	case strings.ContainsAny(before, "?#"):
+		escaped = url.QueryEscape(username)
+	default:
+		escaped = url.PathEscape(username)
+	}
+
+	return before + escaped + after
 }
 
 func BuildDomains(username string) []string {
+	if !dnsLabel.MatchString(username) {
+		return nil
+	}
+
 	tlds := []string{
 		".com", ".net", ".org", ".biz", ".info", ".name", ".pro", ".cat",
 		".co", ".me", ".io", ".tech", ".dev", ".app", ".shop", ".fail",
