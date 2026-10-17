@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -122,7 +123,7 @@ func (sc *searchClient) Search(ctx context.Context, query string) (*modules.Resu
 }
 
 func (sc *searchClient) searchDomain(ctx context.Context, query string) ([]string, error) {
-	domains, err := buildDomains(query)
+	domains, err := sc.buildDomains(query)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +196,7 @@ func (sc *searchClient) searchDomain(ctx context.Context, query string) ([]strin
 	return foundDomains, nil
 }
 
-func buildDomains(field string) ([]string, error) {
+func (sc *searchClient) buildDomains(field string) ([]string, error) {
 	tlds := []string{
 		".com", ".net", ".org", ".biz", ".info", ".name", ".pro", ".cat",
 		".co", ".me", ".io", ".tech", ".dev", ".app", ".shop", ".fail",
@@ -221,7 +222,7 @@ func buildDomains(field string) ([]string, error) {
 }
 
 func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string, error) {
-	sites, err := buildResources(ctx)
+	sites, err := sc.buildResources(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +239,7 @@ func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string,
 
 	for _, site := range sites.Websites {
 		wg.Go(func() {
-			url, err := buildSiteURL(site.BaseURL, query)
+			url, err := sc.buildSiteURL(site.BaseURL, query)
 			if err != nil {
 				theme.Redf("search: build site URL for %s: %v", site.Name, err).Println()
 				return
@@ -256,7 +257,7 @@ func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string,
 
 			probeURL := url
 			if site.URLProbe != "" {
-				probeURL, err = buildSiteURL(site.URLProbe, query)
+				probeURL, err = sc.buildSiteURL(site.URLProbe, query)
 				if err != nil {
 					theme.Redf("search: build probe URL for %s: %v", site.Name, err).Println()
 					return
@@ -326,7 +327,7 @@ func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string,
 				found = strings.Contains(string(body), site.ErrorMsg)
 
 			case "response_url":
-				notFoundURL, err := buildSiteURL(site.ResponseURL, query)
+				notFoundURL, err := sc.buildSiteURL(site.ResponseURL, query)
 				if err != nil {
 					return
 				}
@@ -372,7 +373,7 @@ func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string,
 	return foundSites, nil
 }
 
-func buildResources(ctx context.Context) (*resource, error) {
+func (sc *searchClient) buildResources(ctx context.Context) (*resource, error) {
 	url := "https://raw.githubusercontent.com/ibnaleem/gosearch/refs/heads/main/data.json"
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -380,18 +381,21 @@ func buildResources(ctx context.Context) (*resource, error) {
 		return nil, fmt.Errorf("download data.json: %w", err)
 	}
 
-	response, err := http.DefaultClient.Do(request)
+	response, err := sc.httpClient.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("send request: %w", err)
 	}
 
 	defer response.Body.Close()
 
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download data.json: unexpected status %d", response.StatusCode)
+	var body []byte
+	if response.StatusCode == http.StatusOK {
+		body, err = io.ReadAll(response.Body)
+	} else {
+		theme.Yellowf("[!] Failed to download data.json (HTTP %d), using local copy instead...", response.StatusCode).Println()
+		body, err = os.ReadFile("data.json")
 	}
 
-	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read data.json: %w", err)
 	}
@@ -404,7 +408,7 @@ func buildResources(ctx context.Context) (*resource, error) {
 	return &searchResources, nil
 }
 
-func buildSiteURL(baseURL string, field string) (string, error) {
+func (sc *searchClient) buildSiteURL(baseURL string, field string) (string, error) {
 	if field == "" {
 		return "", errors.New("at least one letter field is required")
 	}
