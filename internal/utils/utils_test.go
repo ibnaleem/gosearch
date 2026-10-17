@@ -1,6 +1,40 @@
 package utils
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/ibnaleem/gosearch/internal/config"
+)
+
+func TestWriteEmailToFileStaysInOutputDir(t *testing.T) {
+	root := t.TempDir()
+	old := config.OutputDir
+	config.OutputDir = filepath.Join(root, "out")
+	defer func() { config.OutputDir = old }()
+
+	WriteEmailToFile("../escaped", "a@b.c\n")
+
+	if _, err := os.Stat(filepath.Join(root, "escaped_emails.txt")); err == nil {
+		t.Fatal("file was written outside the output directory")
+	}
+	if _, err := os.Stat(filepath.Join(config.OutputDir, ".._escaped_emails.txt")); err != nil {
+		t.Fatalf("expected file inside output directory: %v", err)
+	}
+}
+
+func TestSafeFileNameStaysInOutputDir(t *testing.T) {
+	for _, username := range []string{"../../etc/passwd", `..\..\x`, "a/b", "c:evil", "john"} {
+		name := safeFileName(username) + "_emails.txt"
+		if filepath.Base(name) != name {
+			t.Errorf("safeFileName(%q) = %q still contains a path separator", username, name)
+		}
+		if got := filepath.Dir(filepath.Join("out", name)); got != "out" {
+			t.Errorf("safeFileName(%q) lands in %q, want out", username, got)
+		}
+	}
+}
 
 func TestBuildURL(t *testing.T) {
 	tests := []struct {

@@ -20,8 +20,18 @@ import (
 
 var mu sync.Mutex
 
+// path separators plus characters Windows rejects in file names
+var fileNameReplacer = strings.NewReplacer(
+	"/", "_", "\\", "_", ":", "_", "*", "_", "?", "_", "\"", "_", "<", "_", ">", "_", "|", "_",
+)
+
+// safeFileName stops a username like "../x" escaping the output directory
+func safeFileName(username string) string {
+	return fileNameReplacer.Replace(username)
+}
+
 func DeleteOldFile(username string) {
-	os.Remove(fmt.Sprintf("%s.txt", username))
+	os.Remove(fmt.Sprintf("%s.txt", safeFileName(username)))
 }
 
 func WriteToFile(username string, content string) {
@@ -38,7 +48,7 @@ func WriteToFile(username string, content string) {
 		}
 	}
 
-	filePath := filepath.Join(config.OutputDir, fmt.Sprintf("%s_%s.txt", username, time.Now().Format("2006-01-02")))
+	filePath := filepath.Join(config.OutputDir, fmt.Sprintf("%s_%s.txt", safeFileName(username), time.Now().Format("2006-01-02")))
 
 	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, os.ModePerm)
 	if err != nil {
@@ -62,7 +72,7 @@ func WriteEmailToFile(username string, email string) {
 		}
 	}
 	
-	filePath := filepath.Join(config.OutputDir, fmt.Sprintf("%s_emails.txt", username))
+	filePath := filepath.Join(config.OutputDir, fmt.Sprintf("%s_emails.txt", safeFileName(username)))
 
 	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, os.ModePerm)
 
