@@ -104,7 +104,18 @@ func UnmarshalJSON() (models.Data, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return models.Data{}, fmt.Errorf("failed to download data.json, status code: %d", resp.StatusCode)
+		fmt.Println("Failed to download data.json, using local copy instead...")
+		localJsonData, err := os.ReadFile("data.json")
+		if err != nil {
+			return models.Data{}, fmt.Errorf("error reading local data.json: %w", err)
+		}
+
+		var data models.Data
+		err = json.Unmarshal(localJsonData, &data)
+		if err != nil {
+			return models.Data{}, fmt.Errorf("error unmarshalling local JSON: %w", err)
+		}
+		return data, nil
 	}
 
 	jsonData, err := io.ReadAll(resp.Body)
