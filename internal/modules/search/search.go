@@ -8,7 +8,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -374,10 +373,6 @@ func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string,
 }
 
 func buildResources(ctx context.Context) (*resource, error) {
-	if err := os.Remove("data.json"); err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("delete old data.json: %w", err)
-	}
-
 	url := "https://raw.githubusercontent.com/ibnaleem/gosearch/refs/heads/main/data.json"
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
