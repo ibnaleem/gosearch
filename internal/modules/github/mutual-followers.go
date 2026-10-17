@@ -75,8 +75,13 @@ func FindMutualFollowers(followers []GitHubFollowers, username string) ([]string
 		}
 		defer resp.Body.Close()
 
-		if resp.StatusCode == 204 {
-			mutualFollowers = append(mutualFollowers, follower.Login)
+		switch resp.StatusCode {
+		case http.StatusNoContent: // HTTP 204 - following back
+				mutualFollowers = append(mutualFollowers, follower.Login)
+		case http.StatusNotFound: // HTTP 404 - not following back
+				// Do nothing, not a mutual follower
+		default:
+				return mutualFollowers, fmt.Errorf("checking %s: GitHub API returned %d — unauthenticated requests are limited to 60 req/hour; set GITHUB_TOKEN for 5,000 req/hour", follower.Login, resp.StatusCode)
 		}
 	}
 
