@@ -292,6 +292,13 @@ func Search(data models.Data, username string, noFalsePositives bool, wg *sync.W
 		go func(website models.Website) {
 			defer wg.Done()
 
+			// username can't be a subdomain here (e.g. contains '.' or '/'), so the site can't host it
+			if !utils.CanBuildURL(website.BaseURL, username) ||
+				!utils.CanBuildURL(website.URLProbe, username) ||
+				!utils.CanBuildURL(website.ResponseURL, username) {
+				return
+			}
+
 			var url string
 			if website.URLProbe != "" {
 				url = utils.BuildURL(website.URLProbe, username)

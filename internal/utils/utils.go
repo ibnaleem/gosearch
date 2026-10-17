@@ -6,8 +6,10 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -18,8 +20,18 @@ import (
 
 var mu sync.Mutex
 
+// path separators plus characters Windows rejects in file names
+var fileNameReplacer = strings.NewReplacer(
+	"/", "_", "\\", "_", ":", "_", "*", "_", "?", "_", "\"", "_", "<", "_", ">", "_", "|", "_",
+)
+
+// safeFileName stops a username like "../x" escaping the output directory
+func safeFileName(username string) string {
+	return fileNameReplacer.Replace(username)
+}
+
 func DeleteOldFile(username string) {
-	os.Remove(fmt.Sprintf("%s.txt", username))
+	os.Remove(fmt.Sprintf("%s.txt", safeFileName(username)))
 }
 
 func WriteToFile(username string, content string) {
@@ -36,7 +48,7 @@ func WriteToFile(username string, content string) {
 		}
 	}
 
-	filePath := filepath.Join(config.OutputDir, fmt.Sprintf("%s_%s.txt", username, time.Now().Format("2006-01-02")))
+	filePath := filepath.Join(config.OutputDir, fmt.Sprintf("%s_%s.txt", safeFileName(username), time.Now().Format("2006-01-02")))
 
 	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, os.ModePerm)
 	if err != nil {
@@ -60,7 +72,7 @@ func WriteEmailToFile(username string, email string) {
 		}
 	}
 	
-	filePath := filepath.Join(config.OutputDir, fmt.Sprintf("%s_emails.txt", username))
+	filePath := filepath.Join(config.OutputDir, fmt.Sprintf("%s_emails.txt", safeFileName(username)))
 
 	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, os.ModePerm)
 
@@ -75,11 +87,52 @@ func WriteEmailToFile(username string, email string) {
 	}
 }
 
+// a username used as a subdomain must be a single DNS label (RFC 1123)
+var dnsLabel = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
+
+// placeholderInHost reports whether {} sits in the hostname, e.g. https://{}.tumblr.com
+func placeholderInHost(baseURL string) bool {
+	i := strings.Index(baseURL, "{}")
+	if i < 0 {
+		return false
+	}
+	hostStart := strings.Index(baseURL, "://") + len("://")
+	hostEnd := strings.IndexAny(baseURL[hostStart:], "/?#")
+	return hostEnd < 0 || i < hostStart+hostEnd
+}
+
+// CanBuildURL reports whether username can be safely put into baseURL.
+// Path and query placeholders can always be escaped; hostnames cannot.
+func CanBuildURL(baseURL, username string) bool {
+	return !placeholderInHost(baseURL) || dnsLabel.MatchString(username)
+}
+
+// BuildURL substitutes username into the {} placeholder, escaped for the
+// part of the URL it lands in. Hostname placeholders are left raw, so
+// callers must check CanBuildURL first.
 func BuildURL(baseURL, username string) string {
-	return strings.Replace(baseURL, "{}", username, 1)
+	before, after, found := strings.Cut(baseURL, "{}")
+	if !found {
+		return baseURL
+	}
+
+	escaped := username
+	switch {
+	case placeholderInHost(baseURL):
+	case strings.ContainsAny(before, "?#"):
+		escaped = url.QueryEscape(username)
+	default:
+		escaped = url.PathEscape(username)
+	}
+
+	return before + escaped + after
 }
 
 func BuildDomains(username string) []string {
+	if !dnsLabel.MatchString(username) {
+		return nil
+	}
+
 	tlds := []string{
 		".com", ".net", ".org", ".biz", ".info", ".name", ".pro", ".cat",
 		".co", ".me", ".io", ".tech", ".dev", ".app", ".shop", ".fail",
@@ -95,20 +148,37 @@ func BuildDomains(username string) []string {
 }
 
 func UnmarshalJSON() (models.Data, error) {
-	err := os.Remove("data.json")
-	if err != nil && !os.IsNotExist(err) {
-		return models.Data{}, fmt.Errorf("error deleting old data.json: %w", err)
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+	
+	url := "https://raw.githubusercontent.com/ibnaleem/gosearch/refs/heads/main/data.json"
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return models.Data{}, fmt.Errorf("error creating HTTP request: %w", err)
 	}
 
-	url := "https://raw.githubusercontent.com/ibnaleem/gosearch/refs/heads/main/data.json"
-	resp, err := http.Get(url)
+	resp, err := client.Do(req)
 	if err != nil {
 		return models.Data{}, fmt.Errorf("error downloading data.json: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return models.Data{}, fmt.Errorf("failed to download data.json, status code: %d", resp.StatusCode)
+		fmt.Println("Failed to download data.json, using local copy instead...")
+		localJsonData, err := os.ReadFile("data.json")
+		if err != nil {
+			return models.Data{}, fmt.Errorf("error reading local data.json: %w", err)
+		}
+
+		var data models.Data
+		err = json.Unmarshal(localJsonData, &data)
+		if err != nil {
+			return models.Data{}, fmt.Errorf("error unmarshalling local JSON: %w", err)
+		}
+		return data, nil
 	}
 
 	jsonData, err := io.ReadAll(resp.Body)

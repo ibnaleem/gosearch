@@ -122,10 +122,9 @@ func main() {
 	} else {
 		mutualFollowers, err := github.FindMutualFollowers(followers, username)
 		if err != nil {
-			theme.Redf("[-] Error finding mutual followers: %v", err).Println()
-		} else {
-			github.DisplayMutualFollowers(mutualFollowers)
+				theme.Redf("[-] Mutual follower list incomplete: %v", err).Println()
 		}
+		github.DisplayMutualFollowers(mutualFollowers)
 	}
 
 	fmt.Println()
