@@ -95,9 +95,19 @@ func BuildDomains(username string) []string {
 }
 
 func UnmarshalJSON() (models.Data, error) {
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
 	
 	url := "https://raw.githubusercontent.com/ibnaleem/gosearch/refs/heads/main/data.json"
-	resp, err := http.Get(url)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return models.Data{}, fmt.Errorf("error creating HTTP request: %w", err)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return models.Data{}, fmt.Errorf("error downloading data.json: %w", err)
 	}
