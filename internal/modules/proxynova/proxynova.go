@@ -68,8 +68,8 @@ func (pnc *proxyNovaClient) Search(ctx context.Context, query string) (*modules.
 
 	var buffer strings.Builder
 
-	theme.Greenf("[+] Found %d compromised passwords for %s:", len(response.Lines), query).Println()
-	fmt.Fprintf(&buffer, "[+] Found %d compromised passwords for %s:\n", len(response.Lines), query)
+	theme.Greenf("[+] Found %d compromised passwords for %s (showing %d):", response.Count, query, len(response.Lines)).Println()
+	fmt.Fprintf(&buffer, "[+] Found %d compromised passwords for %s (showing %d):\n", response.Count, query, len(response.Lines))
 
 	for index, entry := range response.Lines {
 		if ctxErr := ctx.Err(); ctxErr != nil {
