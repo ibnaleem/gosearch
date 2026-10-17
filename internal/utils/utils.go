@@ -95,11 +95,7 @@ func BuildDomains(username string) []string {
 }
 
 func UnmarshalJSON() (models.Data, error) {
-	err := os.Remove("data.json")
-	if err != nil && !os.IsNotExist(err) {
-		return models.Data{}, fmt.Errorf("error deleting old data.json: %w", err)
-	}
-
+	
 	url := "https://raw.githubusercontent.com/ibnaleem/gosearch/refs/heads/main/data.json"
 	resp, err := http.Get(url)
 	if err != nil {
