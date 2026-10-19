@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+// path separators plus characters Windows rejects in file names
+var fileNameReplacer = strings.NewReplacer(
+	"/", "_", "\\", "_", ":", "_", "*", "_", "?", "_", "\"", "_", "<", "_", ">", "_", "|", "_",
+)
+
 type FileWriter struct {
 	outputPath string
 	createdAt  time.Time
@@ -29,7 +34,8 @@ func (fw *FileWriter) Write(username, content string) error {
 		return fmt.Errorf("create output directory: %w", err)
 	}
 
-	fileName := fmt.Sprintf("%s_%s.txt", username, fw.createdAt.Format("2006-01-02_15-04-05"))
+	// a username like "../x" must not escape the output directory
+	fileName := fmt.Sprintf("%s_%s.txt", fileNameReplacer.Replace(username), fw.createdAt.Format("2006-01-02_15-04-05"))
 	filePath := filepath.Join(fw.outputPath, fileName)
 
 	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)

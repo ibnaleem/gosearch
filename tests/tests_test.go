@@ -98,6 +98,38 @@ func TestFileWriterNamesFilePerRun(t *testing.T) {
 	}
 }
 
+func TestFileWriterStaysInOutputDir(t *testing.T) {
+	for _, username := range []string{"../escaped", "../../etc/passwd", `..\..\x`, "a/b", "c:evil"} {
+		t.Run(username, func(t *testing.T) {
+			root := t.TempDir()
+			out := filepath.Join(root, "out")
+
+			fw := file.NewFileWriter(out)
+			if err := fw.Write(username, "x\n"); err != nil {
+				t.Fatalf("write: %v", err)
+			}
+
+			rootEntries, err := os.ReadDir(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(rootEntries) != 1 || rootEntries[0].Name() != "out" {
+				t.Fatalf("file was written outside the output directory: %v", rootEntries)
+			}
+
+			outEntries, err := os.ReadDir(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(outEntries) != 1 || outEntries[0].IsDir() {
+				t.Fatalf("want 1 file directly inside the output directory, got %v", outEntries)
+			}
+		})
+	}
+}
+
 func TestFileWriterRejectsBlankUsername(t *testing.T) {
 	fw := file.NewFileWriter(t.TempDir())
 	if err := fw.Write("   ", "x"); err == nil {
