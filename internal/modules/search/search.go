@@ -8,7 +8,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -48,6 +50,9 @@ type website struct {
 type resource struct {
 	Websites []website `json:"websites"`
 }
+
+// a query used as a subdomain must be a single DNS label (RFC 1123)
+var dnsLabel = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
 
 func NewSearchClient(fileWriter *file.FileWriter, noFalsePositive bool) modules.Module {
 	httpClient := &http.Client{
@@ -213,6 +218,11 @@ func (sc *searchClient) buildDomains(field string) ([]string, error) {
 		return nil, errors.New("at least one letter field is required")
 	}
 
+	// a domain name can't hold characters like '.', '/' or ' '
+	if !dnsLabel.MatchString(field) {
+		return nil, nil
+	}
+
 	var domains []string
 	for _, tld := range tlds {
 		domains = append(domains, fmt.Sprintf("%s%s", field, tld))
@@ -239,6 +249,13 @@ func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string,
 
 	for _, site := range sites.Websites {
 		wg.Go(func() {
+			// query can't be a subdomain here (e.g. contains '.' or '/'), so the site can't host it
+			if !sc.canBuildSiteURL(site.BaseURL, query) ||
+				!sc.canBuildSiteURL(site.URLProbe, query) ||
+				!sc.canBuildSiteURL(site.ResponseURL, query) {
+				return
+			}
+
 			url, err := sc.buildSiteURL(site.BaseURL, query)
 			if err != nil {
 				theme.Redf("search: build site URL for %s: %v", site.Name, err).Println()
@@ -408,10 +425,46 @@ func (sc *searchClient) buildResources(ctx context.Context) (*resource, error) {
 	return &searchResources, nil
 }
 
+// placeholderInHost reports whether {} sits in the hostname, e.g. https://{}.tumblr.com
+func (sc *searchClient) placeholderInHost(baseURL string) bool {
+	index := strings.Index(baseURL, "{}")
+	if index < 0 {
+		return false
+	}
+
+	hostStart := strings.Index(baseURL, "://") + len("://")
+	hostEnd := strings.IndexAny(baseURL[hostStart:], "/?#")
+
+	return hostEnd < 0 || index < hostStart+hostEnd
+}
+
+// canBuildSiteURL reports whether field can be safely put into baseURL.
+// Path and query placeholders can always be escaped; hostnames cannot.
+func (sc *searchClient) canBuildSiteURL(baseURL string, field string) bool {
+	return !sc.placeholderInHost(baseURL) || dnsLabel.MatchString(field)
+}
+
+// buildSiteURL substitutes field into the {} placeholder, escaped for the
+// part of the URL it lands in. Hostname placeholders are left raw, so
+// callers must check canBuildSiteURL first.
 func (sc *searchClient) buildSiteURL(baseURL string, field string) (string, error) {
 	if field == "" {
 		return "", errors.New("at least one letter field is required")
 	}
 
-	return strings.ReplaceAll(baseURL, "{}", field), nil
+	before, after, found := strings.Cut(baseURL, "{}")
+	if !found {
+		return baseURL, nil
+	}
+
+	escaped := field
+	switch {
+	case sc.placeholderInHost(baseURL):
+	case strings.ContainsAny(before, "?#"):
+		escaped = url.QueryEscape(field)
+	default:
+		escaped = url.PathEscape(field)
+	}
+
+	return before + escaped + after, nil
 }
