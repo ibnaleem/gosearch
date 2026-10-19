@@ -53,9 +53,9 @@ Ideally, it is best practice to run GoSearch with the `--no-false-positives` fla
 ```
 $ gosearch -u [USERNAME] --no-false-positives
 ```
-This will display profiles GoSearch is confident exist on a website. GoSearch also allows you to search [BreachDirectory](https://breachdirectory.org) for compromised passwords associated with a specific username. For this, you must [obtain an API key](https://rapidapi.com/rohan-patra/api/breachdirectory) and provide it with the `-b` flag:
+This will display profiles GoSearch is confident exist on a website. GoSearch also allows you to search [BreachDirectory](https://breachdirectory.org) for compromised passwords associated with a specific username. For this, you must [obtain an API key](https://rapidapi.com/rohan-patra/api/breachdirectory) and provide it with the `-bd` (or `--breach-directory`) flag:
 ```
-$ gosearch -u [USERNAME] -b [API-KEY] --no-false-positives
+$ gosearch -u [USERNAME] -bd [API-KEY] --no-false-positives
 ```
 If GoSearch finds password hashes, it will attempt to crack them using [Weakpass](https://weakpass.com). The success rate is nearly 100%, as Weakpass uses a large wordlist of common data-wells, which align with the breaches reported by [BreachDirectory](https://breachdirectory.org). Every single password hash that's been found in [BreachDirectory](https://breachdirectory.org) has been cracked by [Weakpass](https://weakpass.com).
 
