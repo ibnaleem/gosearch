@@ -541,7 +541,12 @@ func (ghc *gitHubClient) searchMutualFollowers(ctx context.Context, query string
 
 	mutualFollowers, err := ghc.buildMutualFollowersRequest(ctx, query, followers)
 	if err != nil {
-		return nil, err
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+
+		// show what was found before the check failed instead of dropping it
+		theme.Redf("[-] Mutual follower list incomplete: %v", err).Println()
 	}
 
 	if len(mutualFollowers) == 0 {
@@ -632,11 +637,15 @@ func (ghc *gitHubClient) buildMutualFollowersRequest(ctx context.Context, query 
 			return nil, fmt.Errorf("%s(buildMutualFollowersRequest): send request: %w", ghc.Name(), err)
 		}
 
-		if response.StatusCode == http.StatusNoContent {
-			mutualFollowers = append(mutualFollowers, follower.Login)
-		}
-
 		response.Body.Close()
+
+		switch response.StatusCode {
+		case http.StatusNoContent: // HTTP 204 - following back
+			mutualFollowers = append(mutualFollowers, follower.Login)
+		case http.StatusNotFound: // HTTP 404 - not following back
+		default:
+			return mutualFollowers, fmt.Errorf("%s(buildMutualFollowersRequest): checking %s: GitHub API returned %d — unauthenticated requests are limited to 60 req/hour; set GITHUB_TOKEN for 5,000 req/hour", ghc.Name(), follower.Login, response.StatusCode)
+		}
 	}
 
 	return mutualFollowers, nil
