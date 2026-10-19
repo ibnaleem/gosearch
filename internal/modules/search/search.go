@@ -398,18 +398,25 @@ func (sc *searchClient) buildResources(ctx context.Context) (*resource, error) {
 		return nil, fmt.Errorf("download data.json: %w", err)
 	}
 
+	// a network error and a non-200 response both fall back to the local copy
 	response, err := sc.httpClient.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("send request: %w", err)
+	if err == nil {
+		defer response.Body.Close()
+
+		if response.StatusCode != http.StatusOK {
+			err = fmt.Errorf("HTTP %d", response.StatusCode)
+		}
 	}
 
-	defer response.Body.Close()
-
 	var body []byte
-	if response.StatusCode == http.StatusOK {
+	if err == nil {
 		body, err = io.ReadAll(response.Body)
 	} else {
-		theme.Yellowf("[!] Failed to download data.json (HTTP %d), using local copy instead...", response.StatusCode).Println()
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+
+		theme.Yellowf("[!] Failed to download data.json (%v), using local copy instead...", err).Println()
 		body, err = os.ReadFile("data.json")
 	}
 
