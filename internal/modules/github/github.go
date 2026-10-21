@@ -136,37 +136,62 @@ func (ghc *gitHubClient) Search(ctx context.Context, query string) (*modules.Res
 		return nil, nil
 	}
 
+	var failed []string
+
+	// optional steps log their error and let the search carry on, so one
+	// rate-limited lookup doesn't drop the profile that was already found
+	optional := func(step string, err error) error {
+		if err == nil {
+			return nil
+		}
+
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+
+		theme.Redf("[!] %s %s: %v", ghc.Name(), step, err).Println()
+		failed = append(failed, step)
+
+		return nil
+	}
+
 	socialProfile, err := ghc.searchSocialProfile(ctx, query)
-	if err != nil {
+	if err := optional("social accounts", err); err != nil {
 		return nil, err
 	}
 
 	sshKeys, err := ghc.searchSSHKeys(ctx, query)
-	if err != nil {
+	if err := optional("SSH keys", err); err != nil {
 		return nil, err
 	}
 
 	gpgKeys, err := ghc.searchGPGKey(ctx, query)
-	if err != nil {
+	if err := optional("GPG keys", err); err != nil {
 		return nil, err
 	}
 
 	mutualFollowers, err := ghc.searchMutualFollowers(ctx, query)
-	if err != nil {
+	if err := optional("mutual followers", err); err != nil {
 		return nil, err
 	}
 
 	emails, err := ghc.searchEmailFromCommits(ctx, query)
-	if err != nil {
+	if err := optional("commit emails", err); err != nil {
 		return nil, err
 	}
 
+	summary := fmt.Sprintf(
+		"1 profile found, %d social account(s), %d SSH key(s), %d GPG key(s), %d mutual follower(s), %d commit email(s)",
+		len(socialProfile), len(sshKeys), len(gpgKeys), len(mutualFollowers), len(emails),
+	)
+
+	if len(failed) > 0 {
+		summary += "; failed: " + strings.Join(failed, ", ")
+	}
+
 	result := modules.Result{
-		Module: ghc.Name(),
-		Summary: fmt.Sprintf(
-			"1 profile found, %d social account(s), %d SSH key(s), %d GPG key(s), %d mutual follower(s), %d commit email(s)",
-			len(socialProfile), len(sshKeys), len(gpgKeys), len(mutualFollowers), len(emails),
-		),
+		Module:  ghc.Name(),
+		Summary: summary,
 	}
 
 	return &result, nil
