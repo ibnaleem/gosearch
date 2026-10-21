@@ -5,7 +5,6 @@ name: Go
 
 on:
   push:
-    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
@@ -17,15 +16,27 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: '1.22.5'
+        go-version-file: 'go.mod'
+
+    - name: data.json exists
+      run: test -f data.json || { echo "::error file=data.json::data.json was deleted"; exit 1; }
+
+    - name: gofmt
+      run: |
+        unformatted=$(gofmt -l .)
+        if [ -n "$unformatted" ]; then echo "::error::run gofmt -w on:"; echo "$unformatted"; exit 1; fi
+
+    - name: go.mod / go.sum tidy
+      run: go mod tidy && git diff --exit-code go.mod go.sum
+
+    - name: Vet
+      run: go vet ./...
 
     - name: Build
-      run: go build
+      run: go build ./...
 
-    - name: Build Test File
-      run: go build ./tests/test.go
-
+    # Includes TestDataJSON: schema, duplicates, URLs and errorType fields of data.json.
     - name: Test
-      run: go test
+      run: go test -race ./...

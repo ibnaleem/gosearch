@@ -192,12 +192,6 @@
       "errorType": "status_code"
     },
     {
-      "name": "Kick",
-      "base_url": "https://kick.com/{}",
-      "follow_redirects": true,
-      "errorType": "unknown"
-    },
-    {
       "name": "Yandex Dzen",
       "base_url": "https://dzen.ru/{}",
       "follow_redirects": true,
@@ -318,12 +312,6 @@
     {
       "name": "Spotify",
       "base_url": "https://open.spotify.com/user/{}",
-      "follow_redirects": true,
-      "errorType": "status_code"
-    },
-    {
-      "name": "Clubhouse",
-      "base_url": "https://www.joinclubhouse.com/@{}",
       "follow_redirects": true,
       "errorType": "status_code"
     },
@@ -506,13 +494,6 @@
       "base_url": "https://lichess.org/@/{}",
       "follow_redirects": true,
       "errorType": "status_code"
-    },
-    {
-      "name": "Codecademy",
-      "base_url": "https://www.codecademy.com/profiles/{}",
-      "follow_redirects": true,
-      "errorType": "errorMsg",
-      "errorMsg": "<title>Profile Not Found | Codecademy</title>"
     },
     {
       "name": "Gitlab",
@@ -1371,12 +1352,6 @@
       "errorMsg": "<p>Error: This user doesn't exist</p>"
     },
     {
-      "name": "Lichess",
-      "base_url": "https://lichess.org/@/{}",
-      "follow_redirects": true,
-      "errorType": "status_code"
-    },
-    {
       "name": "Listed",
       "base_url": "https://listed.to/@{}",
       "follow_redirects": true,
@@ -1385,12 +1360,6 @@
     {
       "name": "LiveJournal",
       "base_url": "https://{}.livejournal.com",
-      "follow_redirects": true,
-      "errorType": "status_code"
-    },
-    {
-      "name": "Lobsters",
-      "base_url": "https://lobste.rs/u/{}",
       "follow_redirects": true,
       "errorType": "status_code"
     },
