@@ -169,6 +169,10 @@ func (gc *gravatarClient) Search(ctx context.Context, query string) (*modules.Re
 }
 
 func (gc *gravatarClient) buildRequest(ctx context.Context, param any) (*gravatarResponse, error) {
+	// The username comes from user input and becomes a path segment, so it is
+	// path-escaped: unescaped, "foo#bar" or "foo?bar" would cut the path short
+	// at the fragment/query, "a/b" would request a different path, and "100%"
+	// would fail to parse as a URL at all.
 	endpoint := fmt.Sprintf("https://gravatar.com/%s.json", url.PathEscape(fmt.Sprint(param)))
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
