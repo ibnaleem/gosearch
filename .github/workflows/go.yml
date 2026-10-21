@@ -5,7 +5,6 @@ name: Go
 
 on:
   push:
-    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
@@ -14,18 +13,35 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v6
       with:
-        go-version: '1.22.5'
+        go-version-file: 'go.mod'
+
+    - name: data.json exists
+      run: test -f data.json || { echo "::error file=data.json::data.json was deleted"; exit 1; }
+
+    - name: gofmt
+      run: |
+        unformatted=$(gofmt -l .)
+        if [ -n "$unformatted" ]; then echo "::error::run gofmt -w on:"; echo "$unformatted"; exit 1; fi
+
+    - name: go.mod / go.sum tidy
+      run: go mod tidy -diff
+
+    - name: Vet
+      run: go vet ./...
 
     - name: Build
-      run: go build
+      run: go build ./...
 
-    - name: Build Test File
-      run: go build ./tests/test.go
+    # tests/ is its own module, so ./... above skips it.
+    - name: Vet and build tests module
+      working-directory: tests
+      run: go vet ./... && go build ./...
 
+    # Includes TestDataJSON: schema, duplicates, URLs and errorType fields of data.json.
     - name: Test
-      run: go test
+      run: go test -race ./...

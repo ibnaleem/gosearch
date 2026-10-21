@@ -1,22 +1,21 @@
 package main
 
 import (
-	"io"
-	"os"
-	"fmt"
-	"log"
-	"net"
-	"time"
 	"bufio"
-	"strconv"
-	"strings"
-	"net/http"
-	"crypto/tls"
 	"compress/gzip"
 	"compress/zlib"
+	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"github.com/andybalholm/brotli"
-
+	"io"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+	"time"
 )
 
 // Color output constants.
@@ -31,20 +30,20 @@ const (
 const UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0"
 
 var tlsConfig = &tls.Config{
-    MinVersion: tls.VersionTLS12,
-    CipherSuites: []uint16{
-        tls.TLS_AES_128_GCM_SHA256,
-        tls.TLS_AES_256_GCM_SHA384,
-        tls.TLS_CHACHA20_POLY1305_SHA256,
-        tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-        tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-        tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-        tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-        tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-        tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-    },
-    CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256, tls.CurveP384},
-    NextProtos: []string{"http/1.1"},
+	MinVersion: tls.VersionTLS12,
+	CipherSuites: []uint16{
+		tls.TLS_AES_128_GCM_SHA256,
+		tls.TLS_AES_256_GCM_SHA384,
+		tls.TLS_CHACHA20_POLY1305_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+	},
+	CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256, tls.CurveP384},
+	NextProtos:       []string{"http/1.1"},
 }
 
 type Website struct {
@@ -112,21 +111,21 @@ func Mode0(url string) {
 	fmt.Println(Yellow + "[*] Mode: 0 (Status Code)" + Reset)
 
 	client := &http.Client{
-    Timeout: 120 * time.Second,
-    Transport: &http.Transport {
-        TLSClientConfig: tlsConfig,
-        Proxy: http.ProxyFromEnvironment,
-        DialContext: (&net.Dialer{
-            Timeout:   30 * time.Second,
-            KeepAlive: 30 * time.Second,
-            DualStack: true,
-        }).DialContext,
-        MaxIdleConns:          100,
-        IdleConnTimeout:       90 * time.Second,
-        TLSHandshakeTimeout:   10 * time.Second,
-        ExpectContinueTimeout: 1 * time.Second,
-    	},
-    	Jar: nil,
+		Timeout: 120 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+			Proxy:           http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+		Jar: nil,
 	}
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -154,7 +153,7 @@ func Mode0(url string) {
 	defer res.Body.Close()
 
 	fmt.Println(Green+"[+] Response:", res.Status+Reset)
-	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String() + Reset)
+	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String()+Reset)
 }
 
 func Mode1(url string) {
@@ -162,21 +161,21 @@ func Mode1(url string) {
 	fmt.Println(Yellow + "[*] Mode: 1 (Response Body)" + Reset)
 
 	client := &http.Client{
-    Timeout: 120 * time.Second,
-    Transport: &http.Transport {
-        TLSClientConfig: tlsConfig,
-        Proxy: http.ProxyFromEnvironment,
-        DialContext: (&net.Dialer{
-            Timeout:   30 * time.Second,
-            KeepAlive: 30 * time.Second,
-            DualStack: true,
-        }).DialContext,
-        MaxIdleConns:          100,
-        IdleConnTimeout:       90 * time.Second,
-        TLSHandshakeTimeout:   10 * time.Second,
-        ExpectContinueTimeout: 1 * time.Second,
-    	},
-    	Jar: nil,
+		Timeout: 120 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+			Proxy:           http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+		Jar: nil,
 	}
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -235,10 +234,9 @@ func Mode1(url string) {
 		return
 	}
 
-
 	os.WriteFile("response.txt", body, os.ModePerm)
 	fmt.Println(Green+"[+] Response:", res.Status+Reset)
-	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String() + Reset)
+	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String()+Reset)
 	fmt.Println(Green + "[+] Saved response to response.txt" + Reset)
 }
 
@@ -286,30 +284,29 @@ func Mode2(url string) {
 	defer res.Body.Close()
 
 	fmt.Println(Green+"[+] Response:", res.Status+Reset)
-	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String() + Reset)
+	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String()+Reset)
 }
 
 func Mode3(url string) {
 	fmt.Println(Yellow+"[*] Testing URL:", url+Reset)
 	fmt.Println(Yellow + "[*] Mode: 3 (Response Body Without Following Redirects)" + Reset)
 
-
 	client := &http.Client{
-    Timeout: 120 * time.Second,
-    Transport: &http.Transport {
-        TLSClientConfig: tlsConfig,
-        Proxy: http.ProxyFromEnvironment,
-        DialContext: (&net.Dialer{
-            Timeout:   30 * time.Second,
-            KeepAlive: 30 * time.Second,
-            DualStack: true,
-        }).DialContext,
-        MaxIdleConns:          100,
-        IdleConnTimeout:       90 * time.Second,
-        TLSHandshakeTimeout:   10 * time.Second,
-        ExpectContinueTimeout: 1 * time.Second,
-    	},
-    	Jar: nil,
+		Timeout: 120 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+			Proxy:           http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+		Jar: nil,
 	}
 
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
@@ -374,7 +371,7 @@ func Mode3(url string) {
 
 	os.WriteFile("response.txt", body, os.ModePerm)
 	fmt.Println(Green+"[+] Response:", res.Status+Reset)
-	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String() + Reset)
+	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String()+Reset)
 	fmt.Println(Green + "[+] Saved response to response.txt" + Reset)
 }
 
@@ -383,23 +380,22 @@ func Mode4(url string, errorMsg string) {
 	fmt.Println(Yellow+"[*] Testing error message:", errorMsg+Reset)
 	fmt.Println(Yellow + "[*] Mode: 4 (Error Message Check)" + Reset)
 
-
 	client := &http.Client{
-    Timeout: 120 * time.Second,
-    Transport: &http.Transport {
-        TLSClientConfig: tlsConfig,
-        Proxy: http.ProxyFromEnvironment,
-        DialContext: (&net.Dialer{
-            Timeout:   30 * time.Second,
-            KeepAlive: 30 * time.Second,
-            DualStack: true,
-        }).DialContext,
-        MaxIdleConns:          100,
-        IdleConnTimeout:       90 * time.Second,
-        TLSHandshakeTimeout:   10 * time.Second,
-        ExpectContinueTimeout: 1 * time.Second,
-    	},
-    	Jar: nil,
+		Timeout: 120 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+			Proxy:           http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+		Jar: nil,
 	}
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -460,13 +456,13 @@ func Mode4(url string, errorMsg string) {
 
 	bodyStr := string(body)
 	fmt.Println(Green+"[+] Response:", res.Status+Reset)
-	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String() + Reset)
+	fmt.Println(Green+"[+] Response URL:", res.Request.URL.String()+Reset)
 
 	if strings.Contains(bodyStr, errorMsg) {
-		  fmt.Println(Green+"[+] Error message found in response body: " + errorMsg + "\n[+] This means if a profile does not exist on " + url + " I can detect it!" + Reset)
-    } else {
-      fmt.Println(Red+"[-] Error message not found in response body: " + errorMsg + "\n[-] This means if a profile does not exist on " + url + " I CANNOT detect it!" + Reset)
-    }
+		fmt.Println(Green + "[+] Error message found in response body: " + errorMsg + "\n[+] This means if a profile does not exist on " + url + " I can detect it!" + Reset)
+	} else {
+		fmt.Println(Red + "[-] Error message not found in response body: " + errorMsg + "\n[-] This means if a profile does not exist on " + url + " I CANNOT detect it!" + Reset)
+	}
 }
 
 func main() {
@@ -480,18 +476,18 @@ func main() {
 		fmt.Println(Yellow + "2: Status Code (No Redirects) - Manually check if a website throws any status code errors for invalid usernames without following redirects")
 		fmt.Println(Yellow + "3: Response Body (No Redirects) - Manually check if the response body contains any errors for invalid usernames (e.g 'username not found') without following redirects")
 		fmt.Println(Yellow + "4: Error Message Detection - Actively test for and attempt to find any specific error messages in the response body for invalid usernames (e.g. 'user not found' or similar).")
-		fmt.Println(Yellow + "count: Number of websites I can search" + Reset)		
+		fmt.Println(Yellow + "count: Number of websites I can search" + Reset)
 		os.Exit(1)
 	} else if len(os.Args) == 2 {
 		mode := os.Args[1]
-		
+
 		if mode == "count" {
 			data, err := UnmarshalJSON()
 			if err != nil {
 				fmt.Printf("Error unmarshalling json: %v\n", err)
 				os.Exit(1)
 			}
-	
+
 			fmt.Println(Green + "Number of websites I can search: " + strconv.Itoa(len(data.Websites)) + Reset)
 		} else {
 			fmt.Println(Red + "Mode not provided. Please provide either 0, 1, 2, or 3. Exiting..." + Reset)
@@ -519,13 +515,13 @@ func main() {
 
 		var errorMsg string
 		fmt.Print(Yellow + "[*] Please provide an error message found in the response body for me to check if I can detect it for invalid usernames: " + Reset)
-		
+
 		if scanner.Scan() {
 			errorMsg = scanner.Text()
 			Mode4(url, errorMsg)
 		}
 
-		if err:= scanner.Err(); err != nil {
+		if err := scanner.Err(); err != nil {
 			fmt.Println(Red + "Error reading input: " + err.Error() + Reset)
 			os.Exit(1)
 		}

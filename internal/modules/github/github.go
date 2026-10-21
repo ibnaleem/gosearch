@@ -31,7 +31,6 @@ type GitHubUser struct {
 	UpdatedAt       string `json:"updated_at"`
 }
 
-
 func setAuthHeader(req *http.Request) {
 	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -68,7 +67,6 @@ func UnmarshalGitHubUser(username string) (GitHubUser, error) {
 
 	return githubUser, nil
 }
-
 
 func DisplayGitHubInfo(githubUser GitHubUser, username string) {
 	theme.Greenf("[+] GitHub username found: %s", username).Println()
