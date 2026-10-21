@@ -14,10 +14,10 @@ import (
 	"time"
 
 	"github.com/inancgumus/screen"
+	"github.com/joho/godotenv"
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/renderer"
 	"github.com/olekukonko/tablewriter/tw"
-	"github.com/joho/godotenv"
 
 	"github.com/ibnaleem/gosearch/internal/config"
 	"github.com/ibnaleem/gosearch/internal/modules/breachdirectory"
@@ -122,7 +122,7 @@ func main() {
 	} else {
 		mutualFollowers, err := github.FindMutualFollowers(followers, username)
 		if err != nil {
-				theme.Redf("[-] Mutual follower list incomplete: %v", err).Println()
+			theme.Redf("[-] Mutual follower list incomplete: %v", err).Println()
 		}
 		github.DisplayMutualFollowers(mutualFollowers)
 	}

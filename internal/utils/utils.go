@@ -71,7 +71,7 @@ func WriteEmailToFile(username string, email string) {
 			log.Fatal("Error checking output directory:", err)
 		}
 	}
-	
+
 	filePath := filepath.Join(config.OutputDir, fmt.Sprintf("%s_emails.txt", safeFileName(username)))
 
 	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, os.ModePerm)
@@ -152,7 +152,7 @@ func UnmarshalJSON() (models.Data, error) {
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 	}
-	
+
 	url := "https://raw.githubusercontent.com/ibnaleem/gosearch/refs/heads/main/data.json"
 
 	req, err := http.NewRequest("GET", url, nil)
