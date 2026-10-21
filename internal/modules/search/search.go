@@ -94,7 +94,7 @@ func (sc *searchClient) Search(ctx context.Context, query string) (*modules.Resu
 		return nil, fmt.Errorf("%s(searchDomain): search domain: %w", sc.Name(), err)
 	}
 
-	sites, err := sc.searchSite(ctx, query)
+	sites, uncertainSites, err := sc.searchSite(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("%s(searchSite): search site: %w", sc.Name(), err)
 	}
@@ -115,13 +115,25 @@ func (sc *searchClient) Search(ctx context.Context, query string) (*modules.Resu
 		}
 	}
 
+	if len(uncertainSites) > 0 {
+		fmt.Fprintf(&buffer, "[?] %d unverified sites with the query %s (manual check required)\n", len(uncertainSites), query)
+		for index, site := range uncertainSites {
+			fmt.Fprintf(&buffer, ":: %03d :: %s\n", index+1, site)
+		}
+	}
+
 	if err := sc.fileWriter.Write(query, buffer.String()); err != nil {
 		theme.Redf("[!] Could not write output file: %v", err).Println()
 	}
 
+	summary := fmt.Sprintf("%d domain(s), %d site(s) found", len(domains), len(sites))
+	if len(uncertainSites) > 0 {
+		summary += fmt.Sprintf(", %d unverified", len(uncertainSites))
+	}
+
 	result := modules.Result{
 		Module:  sc.Name(),
-		Summary: fmt.Sprintf("%d domain(s), %d site(s) found", len(domains), len(sites)),
+		Summary: summary,
 	}
 
 	return &result, nil
@@ -231,10 +243,12 @@ func (sc *searchClient) buildDomains(field string) ([]string, error) {
 	return domains, nil
 }
 
-func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string, error) {
+// searchSite returns the sites where the query was found, and the sites with
+// errorType "unknown" that can't be verified and need a manual check
+func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string, []string, error) {
 	sites, err := sc.buildResources(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	theme.Cyanf("[*] Searching %d site(s) for %s...", len(sites.Websites), query).Println()
@@ -368,7 +382,7 @@ func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string,
 
 	if len(foundSites) == 0 && len(uncertainSites) == 0 {
 		theme.Redf("[-] No sites found with the query %s", query).Println()
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	if len(foundSites) > 0 {
@@ -387,7 +401,7 @@ func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string,
 		}
 	}
 
-	return foundSites, nil
+	return foundSites, uncertainSites, nil
 }
 
 func (sc *searchClient) buildResources(ctx context.Context) (*resource, error) {
