@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/url"
 	"os"
 	"strings"
@@ -25,7 +26,8 @@ func TestDataJSON(t *testing.T) {
 	if err := dec.Decode(&data); err != nil {
 		t.Fatalf("data.json is not valid against models.Data: %v", err)
 	}
-	if dec.More() {
+	// dec.More() misses a stray '}' or ']'; a second Decode must hit EOF.
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
 		t.Fatal("data.json has trailing content after the top-level object")
 	}
 	if len(data.Websites) == 0 {

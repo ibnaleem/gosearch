@@ -29,13 +29,18 @@ jobs:
         if [ -n "$unformatted" ]; then echo "::error::run gofmt -w on:"; echo "$unformatted"; exit 1; fi
 
     - name: go.mod / go.sum tidy
-      run: go mod tidy && git diff --exit-code go.mod go.sum
+      run: go mod tidy -diff
 
     - name: Vet
       run: go vet ./...
 
     - name: Build
       run: go build ./...
+
+    # tests/ is its own module, so ./... above skips it.
+    - name: Vet and build tests module
+      working-directory: tests
+      run: go vet ./... && go build ./...
 
     # Includes TestDataJSON: schema, duplicates, URLs and errorType fields of data.json.
     - name: Test
