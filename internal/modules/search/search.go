@@ -156,38 +156,49 @@ func (sc *searchClient) searchDomain(ctx context.Context, query string) ([]strin
 
 	for _, domain := range domains {
 		wg.Go(func() {
-			url := fmt.Sprintf("http://%s", domain)
-
-			request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-			if err != nil {
-				theme.Redf("search: create request for %s: %v", domain, err).Println()
-				return
-			}
-
-			request.Header.Set("User-Agent", config.DefaultUserAgent)
-			request.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
-			request.Header.Set("Accept-Language", "en-US,en;q=0.5")
-			request.Header.Set("Upgrade-Insecure-Requests", "1")
-			request.Header.Set("Sec-Fetch-Dest", "document")
-			request.Header.Set("Sec-Fetch-Mode", "navigate")
-			request.Header.Set("Sec-Fetch-Site", "none")
-			request.Header.Set("Sec-Fetch-User", "?1")
-			request.Header.Set("Cache-Control", "max-age=0")
-
-			response, err := sc.noRedirectHTTPClient.Do(request)
-			if err != nil {
-				var opErr *net.OpError
-				if errors.As(err, &opErr) && opErr.Op == "dial" {
+			// most sites redirect http to https, so try https first and fall
+			// back to http; a domain that doesn't respond is just not found
+			var response *http.Response
+			for _, scheme := range []string{"https", "http"} {
+				request, err := http.NewRequestWithContext(ctx, http.MethodGet, scheme+"://"+domain, nil)
+				if err != nil {
 					return
 				}
 
-				theme.Redf("search: send request to %s: %v", domain, err).Println()
+				request.Header.Set("User-Agent", config.DefaultUserAgent)
+				request.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+				request.Header.Set("Accept-Language", "en-US,en;q=0.5")
+				request.Header.Set("Upgrade-Insecure-Requests", "1")
+				request.Header.Set("Sec-Fetch-Dest", "document")
+				request.Header.Set("Sec-Fetch-Mode", "navigate")
+				request.Header.Set("Sec-Fetch-Site", "none")
+				request.Header.Set("Sec-Fetch-User", "?1")
+				request.Header.Set("Cache-Control", "max-age=0")
+
+				response, err = sc.httpClient.Do(request)
+				if err == nil {
+					break
+				}
+
+				// a domain that doesn't resolve won't resolve over http either
+				var dnsErr *net.DNSError
+				if errors.As(err, &dnsErr) {
+					return
+				}
+			}
+
+			if response == nil {
 				return
 			}
 
 			defer response.Body.Close()
 
-			if response.StatusCode >= 200 && response.StatusCode < 400 {
+			// count only a final 200 on the domain itself, so redirects to
+			// parking pages, registrars or other sites don't count as found
+			finalHost := response.Request.URL.Hostname()
+			sameSite := finalHost == domain || finalHost == "www."+domain
+
+			if response.StatusCode == http.StatusOK && sameSite {
 				mu.Lock()
 				foundDomains = append(foundDomains, domain)
 				mu.Unlock()
