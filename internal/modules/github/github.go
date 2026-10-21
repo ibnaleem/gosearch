@@ -170,7 +170,7 @@ func (ghc *gitHubClient) Search(ctx context.Context, query string) (*modules.Res
 		return nil, err
 	}
 
-	mutualFollowers, err := ghc.searchMutualFollowers(ctx, query)
+	mutualFollowers, err := ghc.searchMutualFollowers(ctx, query, user.Followers)
 	if err := optional("mutual followers", err); err != nil {
 		return nil, err
 	}
@@ -551,7 +551,7 @@ func (ghc *gitHubClient) buildGPGKeyRequest(ctx context.Context, param any) ([]g
 	return gitHubGPGKeyResponses, nil
 }
 
-func (ghc *gitHubClient) searchMutualFollowers(ctx context.Context, query string) ([]string, error) {
+func (ghc *gitHubClient) searchMutualFollowers(ctx context.Context, query string, totalFollowers int) ([]string, error) {
 	theme.Cyanf("[*] Searching %s on Github for mutual followers...", query).Println()
 
 	followers, err := ghc.buildFollowersRequest(ctx, query)
@@ -564,25 +564,34 @@ func (ghc *gitHubClient) searchMutualFollowers(ctx context.Context, query string
 		return nil, nil
 	}
 
-	mutualFollowers, err := ghc.buildMutualFollowersRequest(ctx, query, followers)
-	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, ctxErr
-		}
-
-		// show what was found before the check failed instead of dropping it
-		theme.Redf("[-] Mutual follower list incomplete: %v", err).Println()
+	// a failed check is returned to Search, which reports it; only an empty
+	// list from a check that completed means there are no mutual followers
+	// only the first page of followers is checked, since each one costs a
+	// request against GitHub's rate limit; say so when that isn't all of them
+	scope := ""
+	if totalFollowers > len(followers) {
+		scope = fmt.Sprintf(" among the first %d of %d followers", len(followers), totalFollowers)
 	}
 
+	mutualFollowers, checkErr := ghc.buildMutualFollowersRequest(ctx, query, followers)
 	if len(mutualFollowers) == 0 {
-		theme.Redf("[-] No mutual followers found for %s", query).Println()
+		if checkErr != nil {
+			return nil, checkErr
+		}
+
+		theme.Redf("[-] No mutual followers found for %s%s", query, scope).Println()
 		return nil, nil
 	}
 
 	var buffer strings.Builder
 
-	theme.Greenf("[+] Found %d mutual follower(s):", len(mutualFollowers)).Println()
-	fmt.Fprintf(&buffer, "[+] Found %d mutual follower(s):\n", len(mutualFollowers))
+	incomplete := ""
+	if checkErr != nil {
+		incomplete = " (incomplete, check stopped early)"
+	}
+
+	theme.Greenf("[+] Found %d mutual follower(s)%s%s:", len(mutualFollowers), scope, incomplete).Println()
+	fmt.Fprintf(&buffer, "[+] Found %d mutual follower(s)%s%s:\n", len(mutualFollowers), scope, incomplete)
 
 	for index, follower := range mutualFollowers {
 		theme.Greenf(":: %03d :: %s", index+1, follower).Println()
@@ -593,7 +602,7 @@ func (ghc *gitHubClient) searchMutualFollowers(ctx context.Context, query string
 		theme.Redf("[!] Could not write output file: %v", err).Println()
 	}
 
-	return mutualFollowers, nil
+	return mutualFollowers, checkErr
 }
 
 func (ghc *gitHubClient) buildFollowersRequest(ctx context.Context, param any) ([]gitHubFollowersResponse, error) {
@@ -684,6 +693,8 @@ func (ghc *gitHubClient) searchEmailFromCommits(ctx context.Context, query strin
 		return nil, err
 	}
 
+	var lookupErr error
+
 	emails := make(map[string]string)
 	for _, event := range events {
 		if err := ctx.Err(); err != nil {
@@ -694,9 +705,12 @@ func (ghc *gitHubClient) searchEmailFromCommits(ctx context.Context, query strin
 			continue
 		}
 
+		// a failed lookup (e.g. rate limit) would fail for the next commits too,
+		// so stop here and report it instead of showing it as "no emails"
 		commit, err := ghc.buildCommitRequest(ctx, event.Repo.Name, event.Payload.Head)
 		if err != nil {
-			continue
+			lookupErr = err
+			break
 		}
 
 		author := commit.Commit.Author
@@ -708,6 +722,10 @@ func (ghc *gitHubClient) searchEmailFromCommits(ctx context.Context, query strin
 	}
 
 	if len(emails) == 0 {
+		if lookupErr != nil {
+			return nil, lookupErr
+		}
+
 		theme.Redf("[-] No public commit emails found for %s", query).Println()
 		return nil, nil
 	}
@@ -720,8 +738,13 @@ func (ghc *gitHubClient) searchEmailFromCommits(ctx context.Context, query strin
 
 	var buffer strings.Builder
 
-	theme.Greenf("[+] Found %d email(s) in public commits:", len(emails)).Println()
-	fmt.Fprintf(&buffer, "[+] Found %d email(s) in public commits:\n", len(emails))
+	incomplete := ""
+	if lookupErr != nil {
+		incomplete = " (incomplete, lookup stopped early)"
+	}
+
+	theme.Greenf("[+] Found %d email(s) in public commits%s:", len(emails), incomplete).Println()
+	fmt.Fprintf(&buffer, "[+] Found %d email(s) in public commits%s:\n", len(emails), incomplete)
 
 	for index, email := range sortedEmails {
 		info := email
@@ -737,7 +760,7 @@ func (ghc *gitHubClient) searchEmailFromCommits(ctx context.Context, query strin
 		theme.Redf("[!] Could not write output file: %v", err).Println()
 	}
 
-	return emails, nil
+	return emails, lookupErr
 }
 
 func (ghc *gitHubClient) buildEventRequest(ctx context.Context, param any) ([]gitHubEventResponse, error) {
