@@ -100,8 +100,8 @@ func (pnc *proxyNovaClient) Search(ctx context.Context, query string) (*modules.
 	return &result, nil
 }
 
-func (pnc *proxyNovaClient) buildRequest(ctx context.Context, param any) (*proxyNovaResponse, error) {
-	endpoint := fmt.Sprintf("https://api.proxynova.com/comb?query=%s", url.QueryEscape(fmt.Sprint(param)))
+func (pnc *proxyNovaClient) buildRequest(ctx context.Context, query string) (*proxyNovaResponse, error) {
+	endpoint := fmt.Sprintf("https://api.proxynova.com/comb?query=%s", url.QueryEscape(query))
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {

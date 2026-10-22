@@ -284,8 +284,8 @@ func (ghc *gitHubClient) searchUser(ctx context.Context, query string) (*gitHubU
 	return response, nil
 }
 
-func (ghc *gitHubClient) buildUserRequest(ctx context.Context, param any) (*gitHubUserResponse, error) {
-	endpoint := fmt.Sprintf("https://api.github.com/users/%s", url.PathEscape(fmt.Sprint(param)))
+func (ghc *gitHubClient) buildUserRequest(ctx context.Context, query string) (*gitHubUserResponse, error) {
+	endpoint := fmt.Sprintf("https://api.github.com/users/%s", url.PathEscape(query))
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -353,8 +353,8 @@ func (ghc *gitHubClient) searchSocialProfile(ctx context.Context, query string) 
 	return response, nil
 }
 
-func (ghc *gitHubClient) buildSocialAccountRequest(ctx context.Context, param any) ([]gitHubSocialAccountResponse, error) {
-	endpoint := fmt.Sprintf("https://api.github.com/users/%s/social_accounts", url.PathEscape(fmt.Sprint(param)))
+func (ghc *gitHubClient) buildSocialAccountRequest(ctx context.Context, query string) ([]gitHubSocialAccountResponse, error) {
+	endpoint := fmt.Sprintf("https://api.github.com/users/%s/social_accounts", url.PathEscape(query))
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -423,8 +423,8 @@ func (ghc *gitHubClient) searchSSHKeys(ctx context.Context, query string) ([]git
 	return response, nil
 }
 
-func (ghc *gitHubClient) buildSSHKeyRequest(ctx context.Context, param any) ([]gitHubSSHKeyResponse, error) {
-	endpoint := fmt.Sprintf("https://api.github.com/users/%s/keys", url.PathEscape(fmt.Sprint(param)))
+func (ghc *gitHubClient) buildSSHKeyRequest(ctx context.Context, query string) ([]gitHubSSHKeyResponse, error) {
+	endpoint := fmt.Sprintf("https://api.github.com/users/%s/keys", url.PathEscape(query))
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -512,8 +512,8 @@ func (ghc *gitHubClient) searchGPGKey(ctx context.Context, query string) ([]gitH
 	return response, nil
 }
 
-func (ghc *gitHubClient) buildGPGKeyRequest(ctx context.Context, param any) ([]gitHubGPGKeyResponse, error) {
-	endpoint := fmt.Sprintf("https://api.github.com/users/%s/gpg_keys", url.PathEscape(fmt.Sprint(param)))
+func (ghc *gitHubClient) buildGPGKeyRequest(ctx context.Context, query string) ([]gitHubGPGKeyResponse, error) {
+	endpoint := fmt.Sprintf("https://api.github.com/users/%s/gpg_keys", url.PathEscape(query))
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -605,8 +605,8 @@ func (ghc *gitHubClient) searchMutualFollowers(ctx context.Context, query string
 	return mutualFollowers, checkErr
 }
 
-func (ghc *gitHubClient) buildFollowersRequest(ctx context.Context, param any) ([]gitHubFollowersResponse, error) {
-	endpoint := fmt.Sprintf("https://api.github.com/users/%s/followers?per_page=100", url.PathEscape(fmt.Sprint(param)))
+func (ghc *gitHubClient) buildFollowersRequest(ctx context.Context, query string) ([]gitHubFollowersResponse, error) {
+	endpoint := fmt.Sprintf("https://api.github.com/users/%s/followers?per_page=100", url.PathEscape(query))
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -763,8 +763,8 @@ func (ghc *gitHubClient) searchEmailFromCommits(ctx context.Context, query strin
 	return emails, lookupErr
 }
 
-func (ghc *gitHubClient) buildEventRequest(ctx context.Context, param any) ([]gitHubEventResponse, error) {
-	endpoint := fmt.Sprintf("https://api.github.com/users/%s/events/public", url.PathEscape(fmt.Sprint(param)))
+func (ghc *gitHubClient) buildEventRequest(ctx context.Context, query string) ([]gitHubEventResponse, error) {
+	endpoint := fmt.Sprintf("https://api.github.com/users/%s/events/public", url.PathEscape(query))
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {

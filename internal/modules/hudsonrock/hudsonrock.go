@@ -128,8 +128,8 @@ func (hrc *hudsonRockClient) Search(ctx context.Context, query string) (*modules
 	return &result, nil
 }
 
-func (hrc *hudsonRockClient) buildRequest(ctx context.Context, param any) (*hudsonRockResponse, error) {
-	endpoint := fmt.Sprintf("https://cavalier.hudsonrock.com/api/json/v2/osint-tools/search-by-username?username=%s", url.QueryEscape(fmt.Sprint(param)))
+func (hrc *hudsonRockClient) buildRequest(ctx context.Context, query string) (*hudsonRockResponse, error) {
+	endpoint := fmt.Sprintf("https://cavalier.hudsonrock.com/api/json/v2/osint-tools/search-by-username?username=%s", url.QueryEscape(query))
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {

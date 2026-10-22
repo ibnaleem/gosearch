@@ -135,8 +135,8 @@ func (bdc *breachDirectoryClient) Search(ctx context.Context, query string) (*mo
 	return &result, nil
 }
 
-func (bdc *breachDirectoryClient) buildRequest(ctx context.Context, param any) (*breachDirectoryResponse, error) {
-	endpoint := fmt.Sprintf("https://breachdirectory.p.rapidapi.com/?func=auto&term=%s", url.QueryEscape(fmt.Sprint(param)))
+func (bdc *breachDirectoryClient) buildRequest(ctx context.Context, query string) (*breachDirectoryResponse, error) {
+	endpoint := fmt.Sprintf("https://breachdirectory.p.rapidapi.com/?func=auto&term=%s", url.QueryEscape(query))
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {

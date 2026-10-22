@@ -255,8 +255,8 @@ func (kbc *keyBaseClient) Search(ctx context.Context, query string) (*modules.Re
 	return &result, nil
 }
 
-func (kbc *keyBaseClient) buildRequest(ctx context.Context, query any) (*keyBaseResponse, error) {
-	endpoint := fmt.Sprintf("https://keybase.io/_/api/1.0/user/lookup.json?usernames=%s", url.QueryEscape(fmt.Sprint(query)))
+func (kbc *keyBaseClient) buildRequest(ctx context.Context, query string) (*keyBaseResponse, error) {
+	endpoint := fmt.Sprintf("https://keybase.io/_/api/1.0/user/lookup.json?usernames=%s", url.QueryEscape(query))
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
