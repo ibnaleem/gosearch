@@ -2,10 +2,8 @@ package breachdirectory
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -122,37 +120,15 @@ func (bdc *breachDirectoryClient) Search(ctx context.Context, query string) (*mo
 func (bdc *breachDirectoryClient) buildRequest(ctx context.Context, query string) (*breachDirectoryResponse, error) {
 	endpoint := fmt.Sprintf("https://breachdirectory.p.rapidapi.com/?func=auto&term=%s", url.QueryEscape(query))
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	headers := map[string]string{
+		"x-rapidapi-key":  bdc.apiKey,
+		"x-rapidapi-host": "breachdirectory.p.rapidapi.com",
+	}
+
+	response, err := modules.FetchJSON[breachDirectoryResponse](ctx, bdc.httpClient, endpoint, headers)
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): create request: %w", bdc.Name(), err)
+		return nil, fmt.Errorf("%s(buildRequest): %w", bdc.Name(), err)
 	}
 
-	request.Header.Set("User-Agent", config.DefaultUserAgent)
-	request.Header.Set("Accept", "application/json")
-
-	request.Header.Set("x-rapidapi-key", bdc.apiKey)
-	request.Header.Set("x-rapidapi-host", "breachdirectory.p.rapidapi.com")
-
-	response, err := bdc.httpClient.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): send request: %w", bdc.Name(), err)
-	}
-
-	defer response.Body.Close()
-
-	if err := modules.CheckStatus(bdc.Name(), "buildRequest", response.StatusCode); err != nil {
-		return nil, err
-	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): read response: %w", bdc.Name(), err)
-	}
-
-	var breachDirectoryResponse breachDirectoryResponse
-	if err = json.Unmarshal(body, &breachDirectoryResponse); err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): decode response: %w", bdc.Name(), err)
-	}
-
-	return &breachDirectoryResponse, nil
+	return response, nil
 }

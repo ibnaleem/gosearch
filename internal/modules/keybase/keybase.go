@@ -2,9 +2,7 @@ package keybase
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -243,38 +241,14 @@ func (kbc *keyBaseClient) Search(ctx context.Context, query string) (*modules.Re
 func (kbc *keyBaseClient) buildRequest(ctx context.Context, query string) (*keyBaseResponse, error) {
 	endpoint := fmt.Sprintf("https://keybase.io/_/api/1.0/user/lookup.json?usernames=%s", url.QueryEscape(query))
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	response, err := modules.FetchJSON[keyBaseResponse](ctx, kbc.httpClient, endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): create request: %w", kbc.Name(), err)
+		return nil, fmt.Errorf("%s(buildRequest): %w", kbc.Name(), err)
 	}
 
-	request.Header.Set("User-Agent", config.DefaultUserAgent)
-	request.Header.Set("Accept", "application/json")
-
-	response, err := kbc.httpClient.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): send request: %w", kbc.Name(), err)
+	if response.Status.Code != 0 {
+		return nil, fmt.Errorf("%s(buildRequest): api status %d (%s)", kbc.Name(), response.Status.Code, response.Status.Name)
 	}
 
-	defer response.Body.Close()
-
-	if err := modules.CheckStatus(kbc.Name(), "buildRequest", response.StatusCode); err != nil {
-		return nil, err
-	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): read response: %w", kbc.Name(), err)
-	}
-
-	var keyBaseResponse keyBaseResponse
-	if err := json.Unmarshal(body, &keyBaseResponse); err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): decode response: %w", kbc.Name(), err)
-	}
-
-	if keyBaseResponse.Status.Code != 0 {
-		return nil, fmt.Errorf("%s(buildRequest): api status %d (%s)", kbc.Name(), keyBaseResponse.Status.Code, keyBaseResponse.Status.Name)
-	}
-
-	return &keyBaseResponse, nil
+	return response, nil
 }

@@ -2,9 +2,7 @@ package github
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -108,6 +106,18 @@ func NewGitHubClient(fileWriter *file.FileWriter) modules.Module {
 
 func (ghc *gitHubClient) Name() string {
 	return "Github"
+}
+
+// headers returns what every GitHub API request sends on top of the defaults:
+// the GitHub JSON media type and, when GITHUB_TOKEN is set, the token.
+func (ghc *gitHubClient) headers() map[string]string {
+	headers := map[string]string{"Accept": "application/vnd.github+json"}
+
+	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+		headers["Authorization"] = fmt.Sprintf("Bearer %s", token)
+	}
+
+	return headers
 }
 
 func (ghc *gitHubClient) Search(ctx context.Context, query string) (*modules.Result, error) {
@@ -271,40 +281,12 @@ func (ghc *gitHubClient) searchUser(ctx context.Context, query string) (*gitHubU
 func (ghc *gitHubClient) buildUserRequest(ctx context.Context, query string) (*gitHubUserResponse, error) {
 	endpoint := fmt.Sprintf("https://api.github.com/users/%s", url.PathEscape(query))
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	response, err := modules.FetchJSON[gitHubUserResponse](ctx, ghc.httpClient, endpoint, ghc.headers())
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildUserRequest): create request: %w", ghc.Name(), err)
+		return nil, fmt.Errorf("%s(buildUserRequest): %w", ghc.Name(), err)
 	}
 
-	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
-		request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-	}
-
-	request.Header.Set("User-Agent", config.DefaultUserAgent)
-	request.Header.Set("Accept", "application/vnd.github+json")
-
-	response, err := ghc.httpClient.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildUserRequest): send request: %w", ghc.Name(), err)
-	}
-
-	defer response.Body.Close()
-
-	if err := modules.CheckStatus(ghc.Name(), "buildUserRequest", response.StatusCode); err != nil {
-		return nil, err
-	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildUserRequest): read response: %w", ghc.Name(), err)
-	}
-
-	var gitHubUserResponse gitHubUserResponse
-	if err := json.Unmarshal(body, &gitHubUserResponse); err != nil {
-		return nil, fmt.Errorf("%s(buildUserRequest): decode response: %w", ghc.Name(), err)
-	}
-
-	return &gitHubUserResponse, nil
+	return response, nil
 }
 
 func (ghc *gitHubClient) searchSocialProfile(ctx context.Context, query string) ([]gitHubSocialAccountResponse, error) {
@@ -340,40 +322,12 @@ func (ghc *gitHubClient) searchSocialProfile(ctx context.Context, query string) 
 func (ghc *gitHubClient) buildSocialAccountRequest(ctx context.Context, query string) ([]gitHubSocialAccountResponse, error) {
 	endpoint := fmt.Sprintf("https://api.github.com/users/%s/social_accounts", url.PathEscape(query))
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	response, err := modules.FetchJSON[[]gitHubSocialAccountResponse](ctx, ghc.httpClient, endpoint, ghc.headers())
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildSocialAccountRequest): create request: %w", ghc.Name(), err)
+		return nil, fmt.Errorf("%s(buildSocialAccountRequest): %w", ghc.Name(), err)
 	}
 
-	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
-		request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-	}
-
-	request.Header.Set("User-Agent", config.DefaultUserAgent)
-	request.Header.Set("Accept", "application/vnd.github+json")
-
-	response, err := ghc.httpClient.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildSocialAccountRequest): send request: %w", ghc.Name(), err)
-	}
-
-	defer response.Body.Close()
-
-	if err := modules.CheckStatus(ghc.Name(), "buildSocialAccountRequest", response.StatusCode); err != nil {
-		return nil, err
-	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildSocialAccountRequest): read response: %w", ghc.Name(), err)
-	}
-
-	var gitHubSocialAccountResponses []gitHubSocialAccountResponse
-	if err := json.Unmarshal(body, &gitHubSocialAccountResponses); err != nil {
-		return nil, fmt.Errorf("%s(buildSocialAccountRequest): decode response: %w", ghc.Name(), err)
-	}
-
-	return gitHubSocialAccountResponses, nil
+	return *response, nil
 }
 
 func (ghc *gitHubClient) searchSSHKeys(ctx context.Context, query string) ([]gitHubSSHKeyResponse, error) {
@@ -410,40 +364,12 @@ func (ghc *gitHubClient) searchSSHKeys(ctx context.Context, query string) ([]git
 func (ghc *gitHubClient) buildSSHKeyRequest(ctx context.Context, query string) ([]gitHubSSHKeyResponse, error) {
 	endpoint := fmt.Sprintf("https://api.github.com/users/%s/keys", url.PathEscape(query))
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	response, err := modules.FetchJSON[[]gitHubSSHKeyResponse](ctx, ghc.httpClient, endpoint, ghc.headers())
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildSSHKeyRequest): create request: %w", ghc.Name(), err)
+		return nil, fmt.Errorf("%s(buildSSHKeyRequest): %w", ghc.Name(), err)
 	}
 
-	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
-		request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-	}
-
-	request.Header.Set("User-Agent", config.DefaultUserAgent)
-	request.Header.Set("Accept", "application/vnd.github+json")
-
-	response, err := ghc.httpClient.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildSSHKeyRequest): send request: %w", ghc.Name(), err)
-	}
-
-	defer response.Body.Close()
-
-	if err := modules.CheckStatus(ghc.Name(), "buildSSHKeyRequest", response.StatusCode); err != nil {
-		return nil, err
-	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildSSHKeyRequest): read response: %w", ghc.Name(), err)
-	}
-
-	var gitHubSSHKeyResponses []gitHubSSHKeyResponse
-	if err := json.Unmarshal(body, &gitHubSSHKeyResponses); err != nil {
-		return nil, fmt.Errorf("%s(buildSSHKeyRequest): decode response: %w", ghc.Name(), err)
-	}
-
-	return gitHubSSHKeyResponses, nil
+	return *response, nil
 }
 
 func (ghc *gitHubClient) searchGPGKey(ctx context.Context, query string) ([]gitHubGPGKeyResponse, error) {
@@ -499,40 +425,12 @@ func (ghc *gitHubClient) searchGPGKey(ctx context.Context, query string) ([]gitH
 func (ghc *gitHubClient) buildGPGKeyRequest(ctx context.Context, query string) ([]gitHubGPGKeyResponse, error) {
 	endpoint := fmt.Sprintf("https://api.github.com/users/%s/gpg_keys", url.PathEscape(query))
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	response, err := modules.FetchJSON[[]gitHubGPGKeyResponse](ctx, ghc.httpClient, endpoint, ghc.headers())
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildGPGKeyRequest): create request: %w", ghc.Name(), err)
+		return nil, fmt.Errorf("%s(buildGPGKeyRequest): %w", ghc.Name(), err)
 	}
 
-	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
-		request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-	}
-
-	request.Header.Set("User-Agent", config.DefaultUserAgent)
-	request.Header.Set("Accept", "application/vnd.github+json")
-
-	response, err := ghc.httpClient.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildGPGKeyRequest): send request: %w", ghc.Name(), err)
-	}
-
-	defer response.Body.Close()
-
-	if err := modules.CheckStatus(ghc.Name(), "buildGPGKeyRequest", response.StatusCode); err != nil {
-		return nil, err
-	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildGPGKeyRequest): read response: %w", ghc.Name(), err)
-	}
-
-	var gitHubGPGKeyResponses []gitHubGPGKeyResponse
-	if err := json.Unmarshal(body, &gitHubGPGKeyResponses); err != nil {
-		return nil, fmt.Errorf("%s(buildGPGKeyRequest): decode response: %w", ghc.Name(), err)
-	}
-
-	return gitHubGPGKeyResponses, nil
+	return *response, nil
 }
 
 func (ghc *gitHubClient) searchMutualFollowers(ctx context.Context, query string, totalFollowers int) ([]string, error) {
@@ -592,40 +490,12 @@ func (ghc *gitHubClient) searchMutualFollowers(ctx context.Context, query string
 func (ghc *gitHubClient) buildFollowersRequest(ctx context.Context, query string) ([]gitHubFollowersResponse, error) {
 	endpoint := fmt.Sprintf("https://api.github.com/users/%s/followers?per_page=100", url.PathEscape(query))
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	response, err := modules.FetchJSON[[]gitHubFollowersResponse](ctx, ghc.httpClient, endpoint, ghc.headers())
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildFollowersRequest): create request: %w", ghc.Name(), err)
+		return nil, fmt.Errorf("%s(buildFollowersRequest): %w", ghc.Name(), err)
 	}
 
-	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
-		request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-	}
-
-	request.Header.Set("User-Agent", config.DefaultUserAgent)
-	request.Header.Set("Accept", "application/vnd.github+json")
-
-	response, err := ghc.httpClient.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildFollowersRequest): send request: %w", ghc.Name(), err)
-	}
-
-	defer response.Body.Close()
-
-	if err := modules.CheckStatus(ghc.Name(), "buildFollowersRequest", response.StatusCode); err != nil {
-		return nil, err
-	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildFollowersRequest): read response: %w", ghc.Name(), err)
-	}
-
-	var gitHubFollowersResponses []gitHubFollowersResponse
-	if err := json.Unmarshal(body, &gitHubFollowersResponses); err != nil {
-		return nil, fmt.Errorf("%s(buildFollowersRequest): decode response: %w", ghc.Name(), err)
-	}
-
-	return gitHubFollowersResponses, nil
+	return *response, nil
 }
 
 func (ghc *gitHubClient) buildMutualFollowersRequest(ctx context.Context, query string, param []gitHubFollowersResponse) ([]string, error) {
@@ -660,6 +530,7 @@ func (ghc *gitHubClient) buildMutualFollowersRequest(ctx context.Context, query 
 		switch response.StatusCode {
 		case http.StatusNoContent: // HTTP 204 - following back
 			mutualFollowers = append(mutualFollowers, follower.Login)
+
 		case http.StatusNotFound: // HTTP 404 - not following back
 		default:
 			return mutualFollowers, fmt.Errorf("%s(buildMutualFollowersRequest): checking %s: GitHub API returned %d — unauthenticated requests are limited to 60 req/hour; set GITHUB_TOKEN for 5,000 req/hour", ghc.Name(), follower.Login, response.StatusCode)
@@ -750,77 +621,21 @@ func (ghc *gitHubClient) searchEmailFromCommits(ctx context.Context, query strin
 func (ghc *gitHubClient) buildEventRequest(ctx context.Context, query string) ([]gitHubEventResponse, error) {
 	endpoint := fmt.Sprintf("https://api.github.com/users/%s/events/public", url.PathEscape(query))
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	response, err := modules.FetchJSON[[]gitHubEventResponse](ctx, ghc.httpClient, endpoint, ghc.headers())
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildEventRequest): create request: %w", ghc.Name(), err)
+		return nil, fmt.Errorf("%s(buildEventRequest): %w", ghc.Name(), err)
 	}
 
-	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
-		request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-	}
-
-	request.Header.Set("User-Agent", config.DefaultUserAgent)
-	request.Header.Set("Accept", "application/vnd.github+json")
-
-	response, err := ghc.httpClient.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildEventRequest): send request: %w", ghc.Name(), err)
-	}
-
-	defer response.Body.Close()
-
-	if err := modules.CheckStatus(ghc.Name(), "buildEventRequest", response.StatusCode); err != nil {
-		return nil, err
-	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildEventRequest): read response: %w", ghc.Name(), err)
-	}
-
-	var gitHubEventResponses []gitHubEventResponse
-	if err := json.Unmarshal(body, &gitHubEventResponses); err != nil {
-		return nil, fmt.Errorf("%s(buildEventRequest): decode response: %w", ghc.Name(), err)
-	}
-
-	return gitHubEventResponses, nil
+	return *response, nil
 }
 
 func (ghc *gitHubClient) buildCommitRequest(ctx context.Context, repo, sha string) (*gitHubCommitResponse, error) {
 	endpoint := fmt.Sprintf("https://api.github.com/repos/%s/commits/%s", repo, sha)
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	response, err := modules.FetchJSON[gitHubCommitResponse](ctx, ghc.httpClient, endpoint, ghc.headers())
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildCommitRequest): create request: %w", ghc.Name(), err)
+		return nil, fmt.Errorf("%s(buildCommitRequest): %w", ghc.Name(), err)
 	}
 
-	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
-		request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-	}
-
-	request.Header.Set("User-Agent", config.DefaultUserAgent)
-	request.Header.Set("Accept", "application/vnd.github+json")
-
-	response, err := ghc.httpClient.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildCommitRequest): send request: %w", ghc.Name(), err)
-	}
-
-	defer response.Body.Close()
-
-	if err := modules.CheckStatus(ghc.Name(), "buildCommitRequest", response.StatusCode); err != nil {
-		return nil, err
-	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildCommitRequest): read response: %w", ghc.Name(), err)
-	}
-
-	var gitHubCommitResponse gitHubCommitResponse
-	if err := json.Unmarshal(body, &gitHubCommitResponse); err != nil {
-		return nil, fmt.Errorf("%s(buildCommitRequest): decode response: %w", ghc.Name(), err)
-	}
-
-	return &gitHubCommitResponse, nil
+	return response, nil
 }

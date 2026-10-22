@@ -2,9 +2,7 @@ package hudsonrock
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -115,34 +113,10 @@ func (hrc *hudsonRockClient) Search(ctx context.Context, query string) (*modules
 func (hrc *hudsonRockClient) buildRequest(ctx context.Context, query string) (*hudsonRockResponse, error) {
 	endpoint := fmt.Sprintf("https://cavalier.hudsonrock.com/api/json/v2/osint-tools/search-by-username?username=%s", url.QueryEscape(query))
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	response, err := modules.FetchJSON[hudsonRockResponse](ctx, hrc.httpClient, endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): create request: %w", hrc.Name(), err)
+		return nil, fmt.Errorf("%s(buildRequest): %w", hrc.Name(), err)
 	}
 
-	request.Header.Set("User-Agent", config.DefaultUserAgent)
-	request.Header.Set("Accept", "application/json")
-
-	response, err := hrc.httpClient.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): send request: %w", hrc.Name(), err)
-	}
-
-	defer response.Body.Close()
-
-	if err := modules.CheckStatus(hrc.Name(), "buildRequest", response.StatusCode); err != nil {
-		return nil, err
-	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): read response: %w", hrc.Name(), err)
-	}
-
-	var hudsonRockResponse hudsonRockResponse
-	if err := json.Unmarshal(body, &hudsonRockResponse); err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): decode response: %w", hrc.Name(), err)
-	}
-
-	return &hudsonRockResponse, nil
+	return response, nil
 }

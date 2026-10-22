@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -159,36 +158,19 @@ func (gc *gravatarClient) buildRequest(ctx context.Context, query string) (*grav
 	// would fail to parse as a URL at all.
 	endpoint := fmt.Sprintf("https://gravatar.com/%s.json", url.PathEscape(query))
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	// A missing user comes back as the JSON string "User not found" rather than
+	// an object, so the body is fetched raw and checked before decoding.
+	body, err := modules.FetchJSON[json.RawMessage](ctx, gc.httpClient, endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): create request: %w", gc.Name(), err)
+		return nil, fmt.Errorf("%s(buildRequest): %w", gc.Name(), err)
 	}
 
-	request.Header.Set("User-Agent", config.DefaultUserAgent)
-	request.Header.Set("Accept", "application/json")
-
-	response, err := gc.httpClient.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): send request: %w", gc.Name(), err)
-	}
-
-	defer response.Body.Close()
-
-	if err := modules.CheckStatus(gc.Name(), "buildRequest", response.StatusCode); err != nil {
-		return nil, err
-	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): read response: %w", gc.Name(), err)
-	}
-
-	if strings.TrimSpace(string(body)) == `"User not found"` {
+	if strings.TrimSpace(string(*body)) == `"User not found"` {
 		return nil, errGravatarUserNotFound
 	}
 
 	var gravatarResponse gravatarResponse
-	if err := json.Unmarshal(body, &gravatarResponse); err != nil {
+	if err := json.Unmarshal(*body, &gravatarResponse); err != nil {
 		return nil, fmt.Errorf("%s(buildRequest): decode response: %w", gc.Name(), err)
 	}
 

@@ -2,9 +2,7 @@ package proxynova
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -87,35 +85,10 @@ func (pnc *proxyNovaClient) Search(ctx context.Context, query string) (*modules.
 func (pnc *proxyNovaClient) buildRequest(ctx context.Context, query string) (*proxyNovaResponse, error) {
 	endpoint := fmt.Sprintf("https://api.proxynova.com/comb?query=%s", url.QueryEscape(query))
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	response, err := modules.FetchJSON[proxyNovaResponse](ctx, pnc.httpClient, endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): create request: %w", pnc.Name(), err)
+		return nil, fmt.Errorf("%s(buildRequest): %w", pnc.Name(), err)
 	}
 
-	request.Header.Set("User-Agent", config.DefaultUserAgent)
-	request.Header.Set("Accept", "application/json")
-
-	response, err := pnc.httpClient.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): send request: %w", pnc.Name(), err)
-	}
-
-	defer response.Body.Close()
-
-	if err := modules.CheckStatus(pnc.Name(), "buildRequest", response.StatusCode); err != nil {
-		return nil, err
-	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): read response: %w", pnc.Name(), err)
-	}
-
-	var proxyNovaResponse proxyNovaResponse
-	if err := json.Unmarshal(body, &proxyNovaResponse); err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): decode response: %w", pnc.Name(), err)
-	}
-
-	return &proxyNovaResponse, nil
-
+	return response, nil
 }
