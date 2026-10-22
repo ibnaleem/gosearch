@@ -270,6 +270,10 @@ func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string,
 
 		foundSites     []string
 		uncertainSites []string
+
+		// sites that were rate-limited, failed server-side or timed out, so
+		// they couldn't be checked; counted so they don't pass as "not found"
+		failedProbes int
 	)
 
 	for _, site := range sites.Websites {
@@ -338,10 +342,23 @@ func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string,
 
 			response, err := httpClient.Do(request)
 			if err != nil {
+				if ctx.Err() == nil {
+					mu.Lock()
+					failedProbes++
+					mu.Unlock()
+				}
+
 				return
 			}
 
 			defer response.Body.Close()
+
+			if response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= http.StatusInternalServerError {
+				mu.Lock()
+				failedProbes++
+				mu.Unlock()
+				return
+			}
 
 			if response.StatusCode >= http.StatusBadRequest {
 				return
@@ -390,6 +407,10 @@ func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string,
 
 	slices.Sort(foundSites)
 	slices.Sort(uncertainSites)
+
+	if failedProbes > 0 {
+		theme.Yellowf("[!] %d site(s) could not be checked (rate limited, server error or timeout)", failedProbes).Println()
+	}
 
 	if len(foundSites) == 0 && len(uncertainSites) == 0 {
 		theme.Redf("[-] No sites found with the query %s", query).Println()
