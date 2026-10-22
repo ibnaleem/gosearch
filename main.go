@@ -90,7 +90,7 @@ func main() {
 
 		result, err := client.Search(context.Background(), username)
 		if err != nil {
-			theme.Redf("[x] %s: %v", client.Name(), err).Println()
+			theme.Redf("[x] %v", err).Println()
 			continue
 		}
 
