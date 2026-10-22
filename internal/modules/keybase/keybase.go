@@ -246,7 +246,11 @@ func (kbc *keyBaseClient) buildRequest(ctx context.Context, query string) (*keyB
 		return nil, fmt.Errorf("%s(buildRequest): %w", kbc.Name(), err)
 	}
 
-	if response.Status.Code != 0 {
+	switch response.Status.Code {
+	case 0:
+	case 100: // INPUT_ERROR: a name Keybase can't have, e.g. with "." or over 16 characters
+		return &keyBaseResponse{}, nil
+	default:
 		return nil, fmt.Errorf("%s(buildRequest): api status %d (%s)", kbc.Name(), response.Status.Code, response.Status.Name)
 	}
 
