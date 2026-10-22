@@ -20,6 +20,7 @@ import (
 	"github.com/ibnaleem/gosearch/internal/modules/keybase"
 	"github.com/ibnaleem/gosearch/internal/modules/proxynova"
 	"github.com/ibnaleem/gosearch/internal/modules/search"
+	"github.com/ibnaleem/gosearch/internal/modules/weakpass"
 	"github.com/ibnaleem/gosearch/internal/theme"
 	"github.com/inancgumus/screen"
 	"github.com/joho/godotenv"
@@ -70,6 +71,7 @@ func main() {
 	}
 
 	fileWriter := file.NewFileWriter(outputPath)
+	hashCracker := weakpass.NewHashCracker()
 
 	var clients []modules.Module
 	clients = append(clients, gravatar.NewGravatarClient(fileWriter))
@@ -77,7 +79,7 @@ func main() {
 	clients = append(clients, keybase.NewKeyBaseClient(fileWriter))
 	clients = append(clients, proxynova.NewProxyNovaClient(fileWriter))
 	clients = append(clients, github.NewGitHubClient(fileWriter))
-	clients = append(clients, breachdirectory.NewBreachDirectoryClient(fileWriter, breachDirectoryAPIKey))
+	clients = append(clients, breachdirectory.NewBreachDirectoryClient(fileWriter, hashCracker, breachDirectoryAPIKey))
 	clients = append(clients, search.NewSearchClient(fileWriter, noFalsePositive))
 
 	startAt := time.Now()

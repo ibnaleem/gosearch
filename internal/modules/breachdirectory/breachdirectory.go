@@ -18,9 +18,16 @@ import (
 	"github.com/ibnaleem/gosearch/internal/theme"
 )
 
+// hashCracker turns a password hash into plaintext. main.go passes in a
+// weakpass.HashCracker, so this module doesn't depend on Weakpass directly.
+type hashCracker interface {
+	CrackHash(ctx context.Context, hash string) (string, error)
+}
+
 type breachDirectoryClient struct {
 	fileWriter *file.FileWriter
 	httpClient *http.Client
+	cracker    hashCracker
 	apiKey     string
 }
 
@@ -37,13 +44,7 @@ type breachEntry struct {
 	Sources  string `json:"sources"`
 }
 
-type weakpassResponse struct {
-	Type string `json:"type"`
-	Hash string `json:"hash"`
-	Pass string `json:"pass"`
-}
-
-func NewBreachDirectoryClient(fileWriter *file.FileWriter, apiKey string) modules.Module {
+func NewBreachDirectoryClient(fileWriter *file.FileWriter, cracker hashCracker, apiKey string) modules.Module {
 	httpClient := &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
@@ -63,6 +64,7 @@ func NewBreachDirectoryClient(fileWriter *file.FileWriter, apiKey string) module
 	return &breachDirectoryClient{
 		fileWriter: fileWriter,
 		httpClient: httpClient,
+		cracker:    cracker,
 		apiKey:     apiKey,
 	}
 }
@@ -102,7 +104,7 @@ func (bdc *breachDirectoryClient) Search(ctx context.Context, query string) (*mo
 			return nil, ctxErr
 		}
 
-		cracked, err := bdc.crackHashViaWeakpass(ctx, entry.Sha1)
+		cracked, err := bdc.cracker.CrackHash(ctx, entry.Sha1)
 		if err != nil {
 			theme.Yellowf("[!] Could not crack hash: %v", err).Println()
 		}
@@ -169,47 +171,4 @@ func (bdc *breachDirectoryClient) buildRequest(ctx context.Context, param any) (
 	}
 
 	return &breachDirectoryResponse, nil
-}
-
-func (bdc *breachDirectoryClient) crackHashViaWeakpass(ctx context.Context, hash string) (string, error) {
-	if hash == "" {
-		return "", nil
-	}
-
-	endpoint := fmt.Sprintf("https://weakpass.com/api/v1/search/%s.json", url.PathEscape(hash))
-
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return "", fmt.Errorf("%s(crackHashViaWeakpass): build request: %w", bdc.Name(), err)
-	}
-
-	request.Header.Set("User-Agent", config.DefaultUserAgent)
-	request.Header.Set("Accept", "application/json")
-
-	response, err := bdc.httpClient.Do(request)
-	if err != nil {
-		return "", fmt.Errorf("%s(crackHashViaWeakpass): send request: %w", bdc.Name(), err)
-	}
-
-	defer response.Body.Close()
-
-	switch {
-	case response.StatusCode == http.StatusForbidden || response.StatusCode == http.StatusNotFound:
-		// 403 (rate limited) and 404 (hash not in Weakpass) just mean "not cracked".
-		return "", nil
-	case response.StatusCode < 200 || response.StatusCode >= 300:
-		return "", fmt.Errorf("%s(crackHashViaWeakpass): unexpected status %d", bdc.Name(), response.StatusCode)
-	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return "", fmt.Errorf("%s(crackHashViaWeakpass): read response: %w", bdc.Name(), err)
-	}
-
-	var weakpassResponse weakpassResponse
-	if err := json.Unmarshal(body, &weakpassResponse); err != nil {
-		return "", fmt.Errorf("%s(crackHashViaWeakpass): decode response: %w", bdc.Name(), err)
-	}
-
-	return weakpassResponse.Pass, nil
 }
