@@ -47,11 +47,11 @@ func init() {
 
 	flag.BoolVar(&noFalsePositive, "nfp", false, "Do not show false positives")
 	flag.BoolVar(&noFalsePositive, "no-false-positives", false, "Do not show false positives")
-
-	flag.Parse()
 }
 
 func main() {
+	flag.Parse()
+
 	if username == "" {
 		fmt.Fprintln(os.Stderr, "Usage: gosearch -u <username>")
 		fmt.Fprintln(os.Stderr, "For help: gosearch -h")
