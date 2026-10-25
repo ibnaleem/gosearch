@@ -90,15 +90,24 @@ func WriteEmailToFile(username string, email string) {
 // a username used as a subdomain must be a single DNS label (RFC 1123)
 var dnsLabel = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
 
-// placeholderInHost reports whether {} sits in the hostname, e.g. https://{}.tumblr.com
+// placeholderInHost reports whether {} sits in the hostname, e.g. https://{}.tumblr.com.
+// It intentionally treats a placeholder in a path/query/fragment as not being in the host.
 func placeholderInHost(baseURL string) bool {
-	i := strings.Index(baseURL, "{}")
-	if i < 0 {
+	placeholder := strings.Index(baseURL, "{}")
+	if placeholder < 0 {
 		return false
 	}
-	hostStart := strings.Index(baseURL, "://") + len("://")
-	hostEnd := strings.IndexAny(baseURL[hostStart:], "/?#")
-	return hostEnd < 0 || i < hostStart+hostEnd
+
+	start := 0
+	if scheme := strings.Index(baseURL, "://"); scheme >= 0 {
+		start = scheme + len("://")
+	}
+
+	end := strings.IndexAny(baseURL[start:], "/?#")
+	if end < 0 {
+		end = len(baseURL) - start
+	}
+	return placeholder < start+end
 }
 
 // CanBuildURL reports whether username can be safely put into baseURL.
@@ -107,25 +116,36 @@ func CanBuildURL(baseURL, username string) bool {
 	return !placeholderInHost(baseURL) || dnsLabel.MatchString(username)
 }
 
-// BuildURL substitutes username into the {} placeholder, escaped for the
-// part of the URL it lands in. Hostname placeholders are left raw, so
-// callers must check CanBuildURL first.
+// BuildURL substitutes username into each {} placeholder, escaping it for the
+// part of the URL it lands in. Hostname placeholders are left raw, so callers
+// must check CanBuildURL first.
 func BuildURL(baseURL, username string) string {
-	before, after, found := strings.Cut(baseURL, "{}")
-	if !found {
+	if !strings.Contains(baseURL, "{}") {
 		return baseURL
 	}
 
-	escaped := username
-	switch {
-	case placeholderInHost(baseURL):
-	case strings.ContainsAny(before, "?#"):
-		escaped = url.QueryEscape(username)
-	default:
-		escaped = url.PathEscape(username)
-	}
+	var b strings.Builder
+	start := 0
+	for {
+		idx := strings.Index(baseURL[start:], "{}")
+		if idx < 0 {
+			b.WriteString(baseURL[start:])
+			return b.String()
+		}
+		idx += start
 
-	return before + escaped + after
+		b.WriteString(baseURL[start:idx])
+		replacement := username
+		if !placeholderInHost(baseURL[:idx+2]) {
+			if strings.ContainsAny(baseURL[:idx], "?#") {
+				replacement = url.QueryEscape(username)
+			} else {
+				replacement = url.PathEscape(username)
+			}
+		}
+		b.WriteString(replacement)
+		start = idx + len("{}")
+	}
 }
 
 func BuildDomains(username string) []string {
