@@ -1,7 +1,6 @@
 package breachdirectory
 
 import (
-	"log"
 	"sync"
 
 	"github.com/ibnaleem/gobreach"
@@ -16,14 +15,16 @@ func SearchBreachDirectory(username string, apikey string, wg *sync.WaitGroup) {
 
 	client, err := gobreach.NewBreachDirectoryClient(apikey)
 	if err != nil {
-		log.Fatal(err)
+		theme.Redf("[-] Error initializing Breach Directory client for %s: %v", username, err).Println()
+		return
 	}
 
 	theme.Yellow("[*] Searching ", username, " on Breach Directory for any compromised passwords...").Println()
 
 	response, err := client.Search(username)
 	if err != nil {
-		log.Fatal(err)
+		theme.Redf("[-] Error searching Breach Directory for %s: %v", username, err).Println()
+		return
 	}
 
 	if response.Found == 0 {

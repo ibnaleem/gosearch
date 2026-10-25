@@ -309,7 +309,8 @@ func Search(data models.Data, username string, noFalsePositives bool, wg *sync.W
 			if strings.TrimSpace(website.Name) == "GitHub" {
 				githubUser, err := github.UnmarshalGitHubUser(username)
 				if err != nil {
-					log.Fatal(err)
+					theme.Redf("[-] Error fetching GitHub profile for %s: %v", username, err).Println()
+					return
 				}
 				fmt.Println()
 				github.DisplayGitHubInfo(githubUser, username)
@@ -325,7 +326,8 @@ func Search(data models.Data, username string, noFalsePositives bool, wg *sync.W
 			if strings.TrimSpace(website.Name) == "Keybase" {
 				keybaseUser, err := keybase.UnmarshalKeybaseUser(username)
 				if err != nil {
-					log.Fatal(err)
+					theme.Redf("[-] Error fetching Keybase profile for %s: %v", username, err).Println()
+					return
 				}
 				fmt.Println()
 				keybase.DisplayKeybaseInfo(keybaseUser, username)
