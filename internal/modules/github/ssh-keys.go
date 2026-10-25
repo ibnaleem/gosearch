@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/ibnaleem/gosearch/internal/config"
@@ -19,9 +20,9 @@ type GitHubSSHKey struct {
 
 func FetchSSHKeys(username string) ([]GitHubSSHKey, error) {
 	client := &http.Client{}
-	url := fmt.Sprintf("%s/users/%s/keys", githubAPIBase, username)
+	requestURL := fmt.Sprintf("%s/users/%s/keys", githubAPIBase, url.PathEscape(username))
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}

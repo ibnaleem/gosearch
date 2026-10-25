@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 
 	"github.com/ibnaleem/gosearch/internal/config"
@@ -39,9 +40,9 @@ func setAuthHeader(req *http.Request) {
 
 func UnmarshalGitHubUser(username string) (GitHubUser, error) {
 	client := &http.Client{}
-	url := fmt.Sprintf("https://api.github.com/users/%s", username)
+	userURL := "https://api.github.com/users/" + url.PathEscape(username)
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, userURL, nil)
 	if err != nil {
 		return GitHubUser{}, fmt.Errorf("error creating request for user %s: %w", username, err)
 	}

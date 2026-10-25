@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/ibnaleem/gosearch/internal/config"
 	"github.com/ibnaleem/gosearch/internal/theme"
@@ -27,9 +28,9 @@ type GitHubGPGEmail struct {
 
 func FetchGPGKeys(username string) ([]GitHubGPGKey, error) {
 	client := &http.Client{}
-	url := fmt.Sprintf("%s/users/%s/gpg_keys", githubAPIBase, username)
+	requestURL := fmt.Sprintf("%s/users/%s/gpg_keys", githubAPIBase, url.PathEscape(username))
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}

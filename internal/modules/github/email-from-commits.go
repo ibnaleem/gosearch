@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/ibnaleem/gosearch/internal/config"
@@ -123,9 +124,9 @@ func FetchCommit(repo, sha string) (GitHubCommitAuthor, error) {
 func FetchPublicEvents(username string) ([]GitHubEvent, error) {
 	client := &http.Client{}
 
-	url := fmt.Sprintf("%s/users/%s/events/public", githubAPIBase, username)
+	requestURL := fmt.Sprintf("%s/users/%s/events/public", githubAPIBase, url.PathEscape(username))
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}

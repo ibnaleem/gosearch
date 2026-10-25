@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/ibnaleem/gosearch/internal/config"
 	"github.com/ibnaleem/gosearch/internal/theme"
@@ -18,9 +19,9 @@ type GitHubSocialAccount struct {
 
 func FetchSocialAccounts(username string) ([]GitHubSocialAccount, error) {
 	client := &http.Client{}
-	url := fmt.Sprintf("%s/users/%s/social_accounts", githubAPIBase, username)
+	requestURL := fmt.Sprintf("%s/users/%s/social_accounts", githubAPIBase, url.PathEscape(username))
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}

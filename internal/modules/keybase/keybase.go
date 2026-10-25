@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -86,9 +87,11 @@ type KeybaseProof struct {
 
 func UnmarshalKeybaseUser(username string) (KeybaseUser, error) {
 	client := &http.Client{}
-	url := fmt.Sprintf("https://keybase.io/_/api/1.0/user/lookup.json?usernames=%s", username)
+	q := url.Values{}
+	q.Set("usernames", username)
+	requestURL := "https://keybase.io/_/api/1.0/user/lookup.json?" + q.Encode()
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return KeybaseUser{}, fmt.Errorf("error creating request for user %s: %w", username, err)
 	}

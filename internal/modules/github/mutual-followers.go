@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 
 	"github.com/ibnaleem/gosearch/internal/config"
 	"github.com/ibnaleem/gosearch/internal/theme"
@@ -17,9 +18,11 @@ type GitHubFollowers struct {
 
 func FetchFollowers(username string) ([]GitHubFollowers, error) {
 	client := &http.Client{}
-	url := fmt.Sprintf("%s/users/%s/followers?per_page=100", githubAPIBase, username)
+	query := url.Values{}
+	query.Set("per_page", "100")
+	requestURL := fmt.Sprintf("%s/users/%s/followers?%s", githubAPIBase, url.PathEscape(username), query.Encode())
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}
@@ -56,7 +59,7 @@ func FindMutualFollowers(followers []GitHubFollowers, username string) ([]string
 	client := http.Client{}
 
 	for _, follower := range followers {
-		followingURL := fmt.Sprintf("https://api.github.com/users/%s/following/%s", username, follower.Login)
+		followingURL := "https://api.github.com/users/" + url.PathEscape(username) + "/following/" + url.PathEscape(follower.Login)
 
 		req, err := http.NewRequest(http.MethodGet, followingURL, nil)
 		if err != nil {

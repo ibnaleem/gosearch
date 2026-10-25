@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/ibnaleem/gosearch/internal/theme"
@@ -37,8 +38,8 @@ type GravatarUserAccounts struct {
 func SearchGravatar(username string) {
 	theme.Yellow("[*] Searching Gravatar for ", username, "...").Println()
 
-	url := fmt.Sprintf("https://gravatar.com/%s.json", username)
-	resp, err := http.Get(url)
+	profileURL := "https://gravatar.com/" + url.PathEscape(username) + ".json"
+	resp, err := http.Get(profileURL)
 	if err != nil {
 		theme.Redf("[-] Error fetching Gravatar data: %v", err).Println()
 		return
