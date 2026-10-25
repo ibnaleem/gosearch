@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -28,7 +29,9 @@ func SearchProxyNova(username string, wg *sync.WaitGroup) {
 
 	client := &http.Client{}
 
-	req, err := http.NewRequest(http.MethodGet, "https://api.proxynova.com/comb?query="+username, nil)
+	u := url.Values{}
+	u.Set("query", username)
+	req, err := http.NewRequest(http.MethodGet, "https://api.proxynova.com/comb?"+u.Encode(), nil)
 	if err != nil {
 		fmt.Printf("Error creating request: %v\n", err)
 		return

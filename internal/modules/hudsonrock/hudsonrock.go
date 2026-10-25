@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -70,9 +71,11 @@ func formatStealerDate(dateStr string) string {
 func HudsonRock(username string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	url := fmt.Sprintf("https://cavalier.hudsonrock.com/api/json/v2/osint-tools/search-by-username?username=%s", username)
+	q := url.Values{}
+	q.Set("username", username)
+	searchURL := "https://cavalier.hudsonrock.com/api/json/v2/osint-tools/search-by-username?" + q.Encode()
 
-	resp, err := http.Get(url)
+	resp, err := http.Get(searchURL)
 	if err != nil {
 		theme.Redf("Error fetching HudsonRock data:").Print()
 		theme.White(" " + err.Error()).Println()
