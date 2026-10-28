@@ -230,40 +230,88 @@ internal/modules/yourservice/
 
 The package name must match the directory name.
 
-### Required function signature
+### Implementing the module
 
-Every module exposes a single entry function that accepts a username and a `*sync.WaitGroup`:
+Every module implements the `modules.Module` interface from `internal/modules/module.go`:
+
+```go
+type Module interface {
+    Name() string
+    Search(ctx context.Context, query string) (*Result, error)
+}
+```
+
+A minimal module looks like this (see `internal/modules/proxynova/proxynova.go` for a complete example):
 
 ```go
 package yourservice
 
 import (
-    "sync"
+    "context"
+    "fmt"
+    "net/http"
+    "strings"
+    "time"
 
+    "github.com/ibnaleem/gosearch/internal/file"
+    "github.com/ibnaleem/gosearch/internal/modules"
     "github.com/ibnaleem/gosearch/internal/theme"
-    "github.com/ibnaleem/gosearch/internal/utils"
 )
 
-func SearchYourService(username string, wg *sync.WaitGroup) {
-    defer wg.Done()
+type yourServiceClient struct {
+    fileWriter *file.FileWriter
+    httpClient *http.Client
+}
 
-    theme.Yellow("[*] Searching ", username, " on YourService...").Println()
+type yourServiceResponse struct {
+    // fields of the service's JSON response
+}
 
-    // your logic here
+func NewYourServiceClient(fileWriter *file.FileWriter) modules.Module {
+    return &yourServiceClient{
+        fileWriter: fileWriter,
+        httpClient: &http.Client{Timeout: 30 * time.Second},
+    }
+}
 
-    // on success:
+func (ysc *yourServiceClient) Name() string {
+    return "YourService"
+}
+
+func (ysc *yourServiceClient) Search(ctx context.Context, query string) (*modules.Result, error) {
+    theme.Cyan("[*] Searching ", query, " on YourService...").Println()
+
+    // your logic here; return the error on failure:
+    //     return nil, err
+
+    // on not found:
+    //     theme.Red("[-] Nothing found on YourService for ", query, ".").Println()
+    //     return nil, nil
+
+    var buffer strings.Builder
+
     theme.Greenf("[+] Found something: %s", result).Println()
-    utils.WriteToFile(username, "[+] YourService result: "+result+"\n")
+    fmt.Fprintf(&buffer, "[+] Found something: %s\n", result)
 
-    // on failure:
-    theme.Red("[-] Nothing found on YourService for ", username, ".").Println()
+    if err := ysc.fileWriter.Write(query, buffer.String()); err != nil {
+        theme.Redf("[!] Could not write output file: %v", err).Println()
+    }
+
+    return &modules.Result{
+        Module:  ysc.Name(),
+        Summary: "1 result found",
+    }, nil
 }
 ```
 
 Rules:
-- `defer wg.Done()` must be the first statement in the function. Without it the program will hang indefinitely.
-- Use `theme.Yellow` for status messages, `theme.Greenf` for found results, `theme.Red` for not-found.
-- Write any findings to file with `utils.WriteToFile(username, ...)` so they appear in the saved output.
+- Declare types (client struct, response structs) at the top of the file, before the constructor and methods.
+- Receiver names are a short abbreviation of the type, e.g. `pnc` for `proxyNovaClient`, `ghc` for `gitHubClient`.
+- Pass `ctx` to every request with `http.NewRequestWithContext`, and use `modules.CheckStatus` to reject unexpected HTTP statuses.
+- Escape user input before putting it in a URL: `url.PathEscape` for path segments, `url.QueryEscape` for query values.
+- Return `nil, nil` when nothing is found, `nil, err` on failure, and a `*modules.Result` with a short `Summary` on success. The summary appears in the results table at the end of the run.
+- Use `theme.Cyan` for status messages, `theme.Greenf` for found results, `theme.Red` for not-found.
+- Collect findings in a `strings.Builder` and write them once with `fileWriter.Write(query, ...)` so they appear in the saved output. A failed write is a warning, not an error.
 
 ### Environment variables
 
@@ -275,7 +323,7 @@ import "os"
 apiKey := os.Getenv("YOURSERVICE_API_KEY")
 if apiKey == "" {
     theme.Yellow("[*] YOURSERVICE_API_KEY not set, skipping YourService.").Println()
-    return
+    return nil, nil
 }
 ```
 
@@ -283,18 +331,16 @@ Document the variable name in your PR description so it can be added to the READ
 
 ### Wiring into main.go
 
-Import your package and call it in `main.go` using the same `wg.Add(1)` / goroutine / `wg.Wait()` pattern as existing modules:
+Import your package and add your client to the `clients` slice in `main.go`. Modules run in order, and each result is added to the summary table:
 
 ```go
 import "github.com/ibnaleem/gosearch/internal/modules/yourservice"
 
-// in main(), alongside other module calls:
-wg.Add(1)
-go yourservice.SearchYourService(username, &wg)
-wg.Wait()
+// in main(), alongside the other clients:
+clients = append(clients, yourservice.NewYourServiceClient(fileWriter))
 ```
 
-Place the call in a logical position relative to existing modules. Credential sources belong near `proxynova`; social or profile enrichment belongs near the `github` module.
+Place the client in a logical position relative to existing modules. Credential sources belong near `proxynova`; social or profile enrichment belongs near the `github` module.
 
 ### Testing your module
 
@@ -306,16 +352,16 @@ $ ./gosearch -u <known-username>
 ```
 
 Verify that:
-- The program exits cleanly (WaitGroup released correctly)
+- Your module appears in the results table with its summary
 - Found results appear in the terminal and in the output file
 - If no API key is set, the module skips gracefully without panicking
 
 ### PR checklist
 
 - [ ] Package name matches the directory name
-- [ ] `defer wg.Done()` is the first statement in the entry function
+- [ ] The client implements `modules.Module` and is added to `clients` in `main.go`
 - [ ] Terminal output uses `theme` exclusively (no bare `fmt.Println` for results)
-- [ ] Findings are written with `utils.WriteToFile`
+- [ ] Findings are written with `fileWriter.Write`
 - [ ] API keys are read from environment variables, not hardcoded
 - [ ] Tested against a username that exists on the service and one that does not
 - [ ] `go build ./...` passes cleanly
@@ -324,4 +370,4 @@ Verify that:
 
 Thank you for improving GoSearch.
 
-<table><tr><td align="center"><a href="https://github.com/ibnaleem"><img alt="ibnaleem" src="https://avatars.githubusercontent.com/u/134088573?v=4" width="117" /><br />ibnaleem</a></td><td align="center"><a href="https://github.com/shelepuginivan"><img alt="shelepuginivan" src="https://avatars.githubusercontent.com/u/110753839?v=4" width="117" /><br />shelepuginivan</a></td><td align="center"><a href="https://github.com/arealibusadrealiora"><img alt="arealibusadrealiora" src="https://avatars.githubusercontent.com/u/113445322?v=4" width="117" /><br />arealibusadrealiora</a></td><td align="center"><a href="https://github.com/AtahanPoyraz"><img alt="AtahanPoyraz" src="https://avatars.githubusercontent.com/u/129458900?v=4" width="117" /><br />AtahanPoyraz</a></td></tr><tr><td align="center"><a href="https://github.com/vickychhetri"><img alt="vickychhetri" src="https://avatars.githubusercontent.com/u/82648574?v=4" width="117" /><br />vickychhetri</a></td><td align="center"><a href="https://github.com/olekukonko"><img alt="olekukonko" src="https://avatars.githubusercontent.com/u/2615393?v=4" width="117" /><br />olekukonko</a></td><td align="center"><a href="https://github.com/CptIdea"><img alt="CptIdea" src="https://avatars.githubusercontent.com/u/59538729?v=4" width="117" /><br />CptIdea</a></td><td align="center"><a href="https://github.com/yoy123"><img alt="yoy123" src="https://avatars.githubusercontent.com/u/32031720?v=4" width="117" /><br />yoy123</a></td></tr><tr><td align="center"><a href="https://github.com/anotherhadi"><img alt="anotherhadi" src="https://avatars.githubusercontent.com/u/112569860?v=4" width="117" /><br />anotherhadi</a></td><td align="center"><a href="https://github.com/paulpogoda"><img alt="paulpogoda" src="https://avatars.githubusercontent.com/u/170966925?v=4" width="117" /><br />paulpogoda</a></td><td align="center"><a href="https://github.com/apps/dependabot"><img alt="dependabot[bot]" src="https://avatars.githubusercontent.com/in/29110?v=4" width="117" /><br />dependabot[bot]</a></td></tr></table>
+<table><tr><td align="center"><a href="https://github.com/ibnaleem"><img alt="ibnaleem" src="https://avatars.githubusercontent.com/u/134088573?v=4" width="117" /><br />ibnaleem</a></td><td align="center"><a href="https://github.com/shelepuginivan"><img alt="shelepuginivan" src="https://avatars.githubusercontent.com/u/110753839?v=4" width="117" /><br />shelepuginivan</a></td><td align="center"><a href="https://github.com/arealibusadrealiora"><img alt="arealibusadrealiora" src="https://avatars.githubusercontent.com/u/113445322?v=4" width="117" /><br />arealibusadrealiora</a></td><td align="center"><a href="https://github.com/apps/dependabot"><img alt="dependabot[bot]" src="https://avatars.githubusercontent.com/in/29110?v=4" width="117" /><br />dependabot[bot]</a></td></tr><tr><td align="center"><a href="https://github.com/vickychhetri"><img alt="vickychhetri" src="https://avatars.githubusercontent.com/u/82648574?v=4" width="117" /><br />vickychhetri</a></td><td align="center"><a href="https://github.com/olekukonko"><img alt="olekukonko" src="https://avatars.githubusercontent.com/u/2615393?v=4" width="117" /><br />olekukonko</a></td><td align="center"><a href="https://github.com/CptIdea"><img alt="CptIdea" src="https://avatars.githubusercontent.com/u/59538729?v=4" width="117" /><br />CptIdea</a></td><td align="center"><a href="https://github.com/yoy123"><img alt="yoy123" src="https://avatars.githubusercontent.com/u/32031720?v=4" width="117" /><br />yoy123</a></td></tr><tr><td align="center"><a href="https://github.com/anotherhadi"><img alt="anotherhadi" src="https://avatars.githubusercontent.com/u/112569860?v=4" width="117" /><br />anotherhadi</a></td><td align="center"><a href="https://github.com/paulpogoda"><img alt="paulpogoda" src="https://avatars.githubusercontent.com/u/170966925?v=4" width="117" /><br />paulpogoda</a></td><td align="center"><a href="https://github.com/AtahanPoyraz"><img alt="AtahanPoyraz" src="https://avatars.githubusercontent.com/u/129458900?v=4" width="117" /><br />AtahanPoyraz</a></td></tr></table>

@@ -1,130 +1,178 @@
 package gravatar
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
+	"github.com/ibnaleem/gosearch/internal/config"
+	"github.com/ibnaleem/gosearch/internal/file"
+	"github.com/ibnaleem/gosearch/internal/modules"
 	"github.com/ibnaleem/gosearch/internal/theme"
 )
 
-type GravatarResponse struct {
-	Entry []GravatarUser `json:"entry"`
+type gravatarClient struct {
+	fileWriter *file.FileWriter
+	httpClient *http.Client
 }
 
-type GravatarUser struct {
+var errGravatarUserNotFound = errors.New("gravatar: user not found")
+
+type gravatarResponse struct {
+	Entry []gravatarUser `json:"entry"`
+}
+
+type gravatarUser struct {
 	EmailHash         string                 `json:"hash"`
 	Username          string                 `json:"requestHash"`
 	PreferredUsername string                 `json:"preferredUsername"`
 	DisplayName       string                 `json:"displayName"`
 	AboutMe           string                 `json:"aboutMe"`
-	Emails            []GravatarUserEmails   `json:"emails"`
-	Accounts          []GravatarUserAccounts `json:"accounts"`
+	Emails            []gravatarUserEmails   `json:"emails"`
+	Accounts          []gravatarUserAccounts `json:"accounts"`
 }
 
-type GravatarUserEmails struct {
+type gravatarUserEmails struct {
 	Email string `json:"value"`
 }
 
-type GravatarUserAccounts struct {
+type gravatarUserAccounts struct {
 	URL      string `json:"url"`
 	Username string `json:"username"`
 	Name     string `json:"name"`
 }
 
-func SearchGravatar(username string) {
-	theme.Yellow("[*] Searching Gravatar for ", username, "...").Println()
+func NewGravatarClient(fileWriter *file.FileWriter) modules.Module {
+	httpClient := config.NewHTTPClient()
 
-	url := fmt.Sprintf("https://gravatar.com/%s.json", username)
-	resp, err := http.Get(url)
-	if err != nil {
-		theme.Redf("[-] Error fetching Gravatar data: %v", err).Println()
-		return
+	return &gravatarClient{
+		fileWriter: fileWriter,
+		httpClient: httpClient,
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		theme.Red("[-] No Gravatar profile found for ", username).Println()
-		return
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		theme.Redf("[-] Gravatar returned status %d", resp.StatusCode).Println()
-		return
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		theme.Redf("[-] Error reading Gravatar response: %v", err).Println()
-		return
-	}
-
-	var response GravatarResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		theme.Redf("[-] Error parsing Gravatar response: %v", err).Println()
-		return
-	}
-
-	if len(response.Entry) == 0 {
-		theme.Red("[-] No Gravatar profile found for ", username).Println()
-		return
-	}
-
-	DisplayGravatarUserInfo(response.Entry[0])
 }
 
-func DisplayGravatarUserInfo(user GravatarUser) {
-	theme.Greenf("[+] Gravatar username found: %s", user.Username).Println()
+func (gc *gravatarClient) Name() string {
+	return "Gravatar"
+}
 
-	if user.DisplayName != "" {
-		theme.Greenf("[+] ↳ Display name: %s", user.DisplayName).Println()
-	}
+func (gc *gravatarClient) Search(ctx context.Context, query string) (*modules.Result, error) {
+	theme.Cyanf("[*] Searching %s on Gravatar...", query).Println()
 
-	if user.PreferredUsername != "" && user.Username != user.PreferredUsername {
-		theme.Greenf("[+] ↳ Preferred username: %s", user.PreferredUsername).Println()
-	}
-
-	if user.AboutMe != "" {
-		theme.Greenf("[+] ↳ About Me: %s", user.AboutMe).Println()
-	}
-
-	if len(user.Emails) == 0 {
-		fmt.Println(strings.Repeat("⎯", 85))
-		theme.Greenf("[+] ↳ SHA256 Email Hash: %s", user.EmailHash).Println()
-		theme.Green("[+] ↳ Hashcat command to crack this hash:").Println()
-		theme.Greenf("[+] ↳ hashcat -m 1400 -a 0 %s facebook-firstnames.txt -r rules/MISC/emails-combined.rule --bitmap-max 28", user.EmailHash).Println()
-		theme.Green("[+] ↳ Hashcat rules can be found @ https://github.com/ibnaleem/rules").Println()
-		theme.Green("[+] ↳ Wordlists can be found @ https://weakpass.com/wordlists?name=name").Println()
-		theme.Green("[+] ↳ You could also submit this hash to Hashmob.net if you cannot crack it").Println()
-		fmt.Println(strings.Repeat("⎯", 85))
-	} else if len(user.Emails) == 1 {
-		theme.Greenf("[+] ↳ Email: %s", user.Emails[0].Email).Println()
-	} else {
-		fmt.Println(strings.Repeat("⎯", 85))
-		theme.Greenf("[+] %d emails found for %s:", len(user.Emails), user.Username).Println()
-		for _, email := range user.Emails {
-			theme.Greenf("[+] ↳ %s", email.Email).Println()
+	response, err := gc.buildRequest(ctx, query)
+	if err != nil {
+		if errors.Is(err, errGravatarUserNotFound) {
+			theme.Redf("[-] No Gravatar profile found for %s", query).Println()
+			return nil, nil
 		}
-		fmt.Println(strings.Repeat("⎯", 85))
+
+		return nil, err
 	}
 
-	if len(user.Accounts) == 0 {
-		return
+	var buffer strings.Builder
+
+	for index, entry := range response.Entry {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+
+		theme.Greenf("[+] Gravatar username found: %s", entry.Username).Println()
+		fmt.Fprintf(&buffer, "[+] Gravatar username found: %s\n", entry.Username)
+
+		if entry.DisplayName != "" {
+			theme.Greenf(":: %03d :: %-18s : %s", index+1, "Display name", entry.DisplayName).Println()
+			fmt.Fprintf(&buffer, ":: %03d :: %-18s : %s\n", index+1, "Display name", entry.DisplayName)
+		}
+
+		if entry.PreferredUsername != "" && entry.Username != entry.PreferredUsername {
+			theme.Greenf("          %-18s : %s", "Preferred username", entry.PreferredUsername).Println()
+			fmt.Fprintf(&buffer, "          %-18s : %s\n", "Preferred username", entry.PreferredUsername)
+		}
+
+		if entry.AboutMe != "" {
+			theme.Greenf("          %-18s : %s", "About Me", entry.AboutMe).Println()
+			fmt.Fprintf(&buffer, "          %-18s : %s\n", "About Me", entry.AboutMe)
+		}
+
+		if len(entry.Emails) == 0 {
+			theme.Greenf("          %-18s : %s", "SHA256 Email Hash", entry.EmailHash).Println()
+			theme.Green("          Hashcat command to crack this hash:").Println()
+			theme.Greenf("          hashcat -m 1400 -a 0 %s facebook-firstnames.txt -r rules/MISC/emails-combined.rule --bitmap-max 28", entry.EmailHash).Println()
+			theme.Green("          Hashcat rules can be found @ https://github.com/ibnaleem/rules").Println()
+			theme.Green("          Wordlists can be found @ https://weakpass.com/wordlists?name=name").Println()
+			theme.Green("          You could also submit this hash to Hashmob.net if you cannot crack it").Println()
+
+			fmt.Fprintf(&buffer, "          %-18s : %s\n", "SHA256 Email Hash", entry.EmailHash)
+			fmt.Fprintf(&buffer, "          Hashcat command to crack this hash:\n")
+			fmt.Fprintf(&buffer, "          hashcat -m 1400 -a 0 %s facebook-firstnames.txt -r rules/MISC/emails-combined.rule --bitmap-max 28\n", entry.EmailHash)
+			fmt.Fprintf(&buffer, "          Hashcat rules can be found @ https://github.com/ibnaleem/rules\n")
+			fmt.Fprintf(&buffer, "          Wordlists can be found @ https://weakpass.com/wordlists?name=name\n")
+			fmt.Fprintf(&buffer, "          You could also submit this hash to Hashmob.net if you cannot crack it\n")
+		}
+
+		if len(entry.Emails) > 0 {
+			theme.Greenf("[+] Email(s) found for %s:", entry.Username).Println()
+			fmt.Fprintf(&buffer, "[+] Email(s) found for %s:\n", entry.Username)
+			for _, email := range entry.Emails {
+				theme.Greenf("          %s", email.Email).Println()
+				fmt.Fprintf(&buffer, "          %s\n", email.Email)
+			}
+		}
+
+		if len(entry.Accounts) == 0 {
+			continue
+		}
+
+		theme.Greenf("[+] Account(s) found for %s:", entry.Username).Println()
+		fmt.Fprintf(&buffer, "[+] Account(s) found for %s:\n", entry.Username)
+		for _, account := range entry.Accounts {
+			theme.Greenf("          %-11s : %s", "Platform", account.Name).Println()
+			theme.Greenf("          %-11s : %s", "Account URL", account.URL).Println()
+			theme.Greenf("          %-11s : %s", "Username", account.Username).Println()
+
+			fmt.Fprintf(&buffer, "          %-11s : %s\n", "Platform", account.Name)
+			fmt.Fprintf(&buffer, "          %-11s : %s\n", "Account URL", account.URL)
+			fmt.Fprintf(&buffer, "          %-11s : %s\n", "Username", account.Username)
+		}
 	}
 
-	fmt.Println(strings.Repeat("⎯", 85))
-	if len(user.Accounts) == 1 {
-		theme.Greenf("[+] An account was found for %s:", user.Username).Println()
-	} else {
-		theme.Greenf("[+] %d accounts found for %s:", len(user.Accounts), user.Username).Println()
+	if err := gc.fileWriter.Write(query, buffer.String()); err != nil {
+		theme.Redf("[!] Could not write output file: %v", err).Println()
 	}
-	for _, account := range user.Accounts {
-		fmt.Println(strings.Repeat("⎯", 85))
-		theme.Greenf("[+] ↳ Platform: %s", account.Name).Println()
-		theme.Greenf("[+] ↳ Account URL: %s", account.URL).Println()
-		theme.Greenf("[+] ↳ Username: %s", account.Username).Println()
+
+	result := modules.Result{
+		Module:  gc.Name(),
+		Summary: fmt.Sprintf("%d profile(s) found", len(response.Entry)),
 	}
-	fmt.Println(strings.Repeat("⎯", 85))
+
+	return &result, nil
+}
+
+func (gc *gravatarClient) buildRequest(ctx context.Context, query string) (*gravatarResponse, error) {
+	// The username comes from user input and becomes a path segment, so it is
+	// path-escaped: unescaped, "foo#bar" or "foo?bar" would cut the path short
+	// at the fragment/query, "a/b" would request a different path, and "100%"
+	// would fail to parse as a URL at all.
+	endpoint := fmt.Sprintf("https://gravatar.com/%s.json", url.PathEscape(query))
+
+	// A missing user comes back as the JSON string "User not found" rather than
+	// an object, so the body is fetched raw and checked before decoding.
+	body, err := modules.FetchJSON[json.RawMessage](ctx, gc.httpClient, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%s(buildRequest): %w", gc.Name(), err)
+	}
+
+	if strings.TrimSpace(string(*body)) == `"User not found"` {
+		return nil, errGravatarUserNotFound
+	}
+
+	var gravatarResponse gravatarResponse
+	if err := json.Unmarshal(*body, &gravatarResponse); err != nil {
+		return nil, fmt.Errorf("%s(buildRequest): decode response: %w", gc.Name(), err)
+	}
+
+	return &gravatarResponse, nil
 }

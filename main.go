@@ -4,181 +4,114 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
-	"log"
 	"os"
-	"strconv"
-	"strings"
-	"sync"
 	"time"
 
+	"github.com/ibnaleem/gosearch/internal/config"
+	"github.com/ibnaleem/gosearch/internal/file"
+	"github.com/ibnaleem/gosearch/internal/modules"
+	"github.com/ibnaleem/gosearch/internal/modules/breachdirectory"
+	"github.com/ibnaleem/gosearch/internal/modules/github"
+	"github.com/ibnaleem/gosearch/internal/modules/gravatar"
+	"github.com/ibnaleem/gosearch/internal/modules/hudsonrock"
+	"github.com/ibnaleem/gosearch/internal/modules/keybase"
+	"github.com/ibnaleem/gosearch/internal/modules/proxynova"
+	"github.com/ibnaleem/gosearch/internal/modules/search"
+	"github.com/ibnaleem/gosearch/internal/modules/weakpass"
+	"github.com/ibnaleem/gosearch/internal/theme"
 	"github.com/inancgumus/screen"
 	"github.com/joho/godotenv"
-	"github.com/olekukonko/tablewriter"
-	"github.com/olekukonko/tablewriter/renderer"
-	"github.com/olekukonko/tablewriter/tw"
-
-	"github.com/ibnaleem/gosearch/internal/config"
-	"github.com/ibnaleem/gosearch/internal/modules/breachdirectory"
-	github "github.com/ibnaleem/gosearch/internal/modules/github"
-	"github.com/ibnaleem/gosearch/internal/modules/hudsonrock"
-	"github.com/ibnaleem/gosearch/internal/modules/proxynova"
-	"github.com/ibnaleem/gosearch/internal/search"
-	"github.com/ibnaleem/gosearch/internal/theme"
-	"github.com/ibnaleem/gosearch/internal/utils"
 )
 
+var (
+	username              string
+	outputPath            string
+	breachDirectoryAPIKey string
+	noFalsePositive       bool
+)
+
+func init() {
+	godotenv.Load()
+
+	flag.StringVar(&username, "u", "", "Username to search")
+	flag.StringVar(&username, "username", "", "Username to search")
+
+	flag.StringVar(&outputPath, "o", ".", "Directory to save the output files (default: current directory)")
+	flag.StringVar(&outputPath, "output", ".", "Directory to save the output files (default: current directory)")
+
+	flag.StringVar(&breachDirectoryAPIKey, "bd", "", "Search Breach Directory with an API Key")
+	flag.StringVar(&breachDirectoryAPIKey, "breach-directory", "", "Search Breach Directory with an API Key")
+
+	flag.BoolVar(&noFalsePositive, "nfp", false, "Do not show false positives")
+	flag.BoolVar(&noFalsePositive, "no-false-positives", false, "Do not show false positives")
+}
+
 func main() {
-
-	godotenv.Load() // silently ignored if no .env file
-
-	var username string
-	var apikey string
-
-	usernameFlag := flag.String("u", "", "Username to search")
-	usernameFlagLong := flag.String("username", "", "Username to search")
-	noFalsePositivesFlag := flag.Bool("no-false-positives", false, "Do not show false positives")
-	breachDirectoryAPIKey := flag.String("b", "", "Search Breach Directory with an API Key")
-	breachDirectoryAPIKeyLong := flag.String("breach-directory", "", "Search Breach Directory with an API Key")
-	outputFlag := flag.String("o", "", "Directory to save the output files (default: current directory)")
-	outputFlagLong := flag.String("output", "", "Directory to save the output files (default: current directory)")
-
 	flag.Parse()
 
-	if *usernameFlag != "" {
-		username = *usernameFlag
-	} else if *usernameFlagLong != "" {
-		username = *usernameFlagLong
-	} else {
-		fmt.Println("Usage: gosearch -u <username>\nIssues: https://github.com/ibnaleem/gosearch/issues")
-		os.Exit(1)
-	}
-
-	if *outputFlag != "" {
-		config.OutputDir = *outputFlag
-	} else if *outputFlagLong != "" {
-		config.OutputDir = *outputFlagLong
-	}
-
-	var wg sync.WaitGroup
-
-	data, err := utils.UnmarshalJSON()
-	if err != nil {
-		fmt.Printf("Error unmarshalling json: %v\n", err)
+	if username == "" {
+		fmt.Fprintln(os.Stderr, "Usage: gosearch -u <username>")
+		fmt.Fprintln(os.Stderr, "For help: gosearch -h")
+		fmt.Fprintln(os.Stderr, "Issues: https://github.com/ibnaleem/gosearch/issues")
 		os.Exit(1)
 	}
 
 	screen.Clear()
+
 	fmt.Print(config.ASCII)
 	fmt.Println(config.VERSION)
-	fmt.Println(strings.Repeat("⎯", 85))
-	fmt.Println(":: Username                              : ", username)
-	fmt.Println(":: Websites                              : ", len(data.Websites))
+	fmt.Println(config.SEPERATOR)
+	fmt.Printf(":: %-38s: %s\n", "Query ", username)
 
-	if *noFalsePositivesFlag {
-		fmt.Println(":: No False Positives                    : ", *noFalsePositivesFlag)
+	if noFalsePositive {
+		fmt.Printf(":: %-38s: %v\n", "No False Positives", noFalsePositive)
 	}
 
-	fmt.Println(strings.Repeat("⎯", 85))
-	fmt.Println()
+	fileWriter := file.NewFileWriter(outputPath)
+	hashCracker := weakpass.NewHashCracker()
 
-	if !*noFalsePositivesFlag {
-		fmt.Println("[!] A yellow link indicates that I was unable to verify whether the username exists on the platform.")
-	}
+	var clients []modules.Module
+	clients = append(clients, gravatar.NewGravatarClient(fileWriter))
+	clients = append(clients, hudsonrock.NewHudsonRockClient(fileWriter))
+	clients = append(clients, keybase.NewKeyBaseClient(fileWriter))
+	clients = append(clients, proxynova.NewProxyNovaClient(fileWriter))
+	clients = append(clients, github.NewGitHubClient(fileWriter))
+	clients = append(clients, breachdirectory.NewBreachDirectoryClient(fileWriter, hashCracker, breachDirectoryAPIKey))
+	clients = append(clients, search.NewSearchClient(fileWriter, noFalsePositive))
 
-	start := time.Now()
+	startAt := time.Now()
 
-	wg.Add(len(data.Websites))
-	go search.Search(data, username, *noFalsePositivesFlag, &wg)
-	wg.Wait()
+	var results []modules.Result
+	for _, client := range clients {
+		fmt.Println(config.SEPERATOR)
 
-	fmt.Println()
-	fmt.Println()
-
-	github.DisplayEmailsFromCommits(username)
-
-	fmt.Println()
-	fmt.Println()
-
-	github.DisplayGPGKeys(username)
-
-	fmt.Println()
-	fmt.Println()
-
-	github.DisplaySSHKeys(username)
-
-	fmt.Println()
-	fmt.Println()
-
-	github.DisplaySocialAccounts(username)
-
-	fmt.Println()
-	fmt.Println()
-
-	followers, err := github.FetchFollowers(username)
-	if err != nil {
-		theme.Redf("[-] Error fetching followers: %v", err).Println()
-	} else {
-		mutualFollowers, err := github.FindMutualFollowers(followers, username)
+		result, err := client.Search(context.Background(), username)
 		if err != nil {
-			theme.Redf("[-] Mutual follower list incomplete: %v", err).Println()
-		}
-		github.DisplayMutualFollowers(mutualFollowers)
-	}
-
-	fmt.Println()
-	fmt.Println()
-
-	wg.Add(1)
-	utils.WriteToFile(username, strings.Repeat("⎯", 85))
-	theme.Yellow("[*] Searching HudsonRock's Cybercrime Intelligence Database...").Println()
-	go hudsonrock.HudsonRock(username, &wg)
-	wg.Wait()
-
-	if *breachDirectoryAPIKey != "" || *breachDirectoryAPIKeyLong != "" {
-		if *breachDirectoryAPIKey != "" {
-			apikey = *breachDirectoryAPIKey
-		} else {
-			apikey = *breachDirectoryAPIKeyLong
+			theme.Redf("[x] %v", err).Println()
+			continue
 		}
 
-		fmt.Println()
-		fmt.Println()
-
-		wg.Add(1)
-		go breachdirectory.SearchBreachDirectory(username, apikey, &wg)
-		wg.Wait()
+		if result != nil {
+			results = append(results, *result)
+		}
 	}
 
-	fmt.Println()
-	fmt.Println()
+	fmt.Println(config.SEPERATOR)
+	fmt.Println(":: RESULTS ::")
+	fmt.Println(config.SEPERATOR)
 
-	wg.Add(1)
-	utils.WriteToFile(username, strings.Repeat("⎯", 85))
-	go proxynova.SearchProxyNova(username, &wg)
-	wg.Wait()
-
-	fmt.Println()
-	fmt.Println()
-
-	domains := utils.BuildDomains(username)
-	wg.Add(1)
-	go search.SearchDomains(username, domains, &wg)
-	wg.Wait()
-
-	fmt.Println()
-	fmt.Println()
-
-	elapsed := time.Since(start)
-
-	table := tablewriter.NewTable(os.Stdout, tablewriter.WithRenderer(renderer.NewBlueprint(tw.Rendition{Borders: tw.BorderNone})))
-	table.Append(theme.Bold("Number of profiles found"), theme.Red(config.Count.Load()))
-	table.Append(theme.Bold("Total time taken"), theme.Green(elapsed))
-	if err := table.Render(); err != nil {
-		log.Printf("table render failed: %v", err)
+	for _, result := range results {
+		fmt.Printf(":: %-38s: %s\n", result.Module, result.Summary)
 	}
 
-	utils.WriteToFile(username, ":: Number of profiles found              : "+strconv.Itoa(int(config.Count.Load())))
-	utils.WriteToFile(username, ":: Total time taken                      : "+elapsed.String())
+	fmt.Println(config.SEPERATOR)
+	fmt.Printf(":: %-38s: %s\n", "Saved to ", outputPath)
+	fmt.Printf(":: %-38s: %s\n", "Completed in", time.Since(startAt).Round(time.Millisecond))
+
+	fmt.Println(config.SEPERATOR)
+
+	os.Exit(0)
 }

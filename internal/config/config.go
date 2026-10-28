@@ -2,7 +2,7 @@ package config
 
 import (
 	"crypto/tls"
-	"sync/atomic"
+	"strings"
 )
 
 const ASCII = `
@@ -38,7 +38,4 @@ var TLSConfig = &tls.Config{
 	NextProtos:       []string{"http/1.1"},
 }
 
-var (
-	Count     atomic.Uint32
-	OutputDir = "."
-)
+var SEPERATOR = strings.Repeat("-", 85)
