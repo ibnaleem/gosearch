@@ -7,6 +7,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -21,7 +22,6 @@ import (
 	"github.com/ibnaleem/gosearch/internal/modules/proxynova"
 	"github.com/ibnaleem/gosearch/internal/modules/search"
 	"github.com/ibnaleem/gosearch/internal/modules/weakpass"
-	"github.com/ibnaleem/gosearch/internal/theme"
 	"github.com/inancgumus/screen"
 	"github.com/joho/godotenv"
 )
@@ -73,31 +73,19 @@ func main() {
 	fileWriter := file.NewFileWriter(outputPath)
 	hashCracker := weakpass.NewHashCracker()
 
-	var clients []modules.Module
-	clients = append(clients, gravatar.NewGravatarClient(fileWriter))
-	clients = append(clients, hudsonrock.NewHudsonRockClient(fileWriter))
-	clients = append(clients, keybase.NewKeyBaseClient(fileWriter))
-	clients = append(clients, proxynova.NewProxyNovaClient(fileWriter))
-	clients = append(clients, github.NewGitHubClient(fileWriter))
-	clients = append(clients, breachdirectory.NewBreachDirectoryClient(fileWriter, hashCracker, breachDirectoryAPIKey))
-	clients = append(clients, search.NewSearchClient(fileWriter, noFalsePositive))
-
 	startAt := time.Now()
 
-	var results []modules.Result
-	for _, client := range clients {
-		fmt.Println(config.SEPERATOR)
-
-		result, err := client.Search(context.Background(), username)
-		if err != nil {
-			theme.Redf("[x] %v", err).Println()
-			continue
-		}
-
-		if result != nil {
-			results = append(results, *result)
-		}
-	}
+	results := runModules(context.Background(), os.Stdout, username, []func(io.Writer) modules.Module{
+		func(w io.Writer) modules.Module { return gravatar.NewGravatarClient(w, fileWriter) },
+		func(w io.Writer) modules.Module { return hudsonrock.NewHudsonRockClient(w, fileWriter) },
+		func(w io.Writer) modules.Module { return keybase.NewKeyBaseClient(w, fileWriter) },
+		func(w io.Writer) modules.Module { return proxynova.NewProxyNovaClient(w, fileWriter) },
+		func(w io.Writer) modules.Module { return github.NewGitHubClient(w, fileWriter) },
+		func(w io.Writer) modules.Module {
+			return breachdirectory.NewBreachDirectoryClient(w, fileWriter, hashCracker, breachDirectoryAPIKey)
+		},
+		func(w io.Writer) modules.Module { return search.NewSearchClient(w, fileWriter, noFalsePositive) },
+	})
 
 	fmt.Println(config.SEPERATOR)
 	fmt.Println(":: RESULTS ::")

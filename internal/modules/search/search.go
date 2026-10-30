@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ibnaleem/gosearch/internal/config"
 	"github.com/ibnaleem/gosearch/internal/file"
@@ -23,6 +24,7 @@ import (
 
 type searchClient struct {
 	fileWriter           *file.FileWriter
+	out                  io.Writer
 	httpClient           *http.Client
 	noRedirectHTTPClient *http.Client
 	noFalsePositive      bool
@@ -50,10 +52,14 @@ type resource struct {
 	Websites []website `json:"websites"`
 }
 
+// probeTimeout caps one site check; the slowest live site measured answered
+// in 8s, while a dead host otherwise holds the whole search for the 30s client timeout
+var probeTimeout = 15 * time.Second
+
 // a query used as a subdomain must be a single DNS label (RFC 1123)
 var dnsLabel = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
 
-func NewSearchClient(fileWriter *file.FileWriter, noFalsePositive bool) modules.Module {
+func NewSearchClient(out io.Writer, fileWriter *file.FileWriter, noFalsePositive bool) modules.Module {
 	httpClient := config.NewHTTPClient()
 
 	noRedirectHTTPClient := *httpClient
@@ -63,6 +69,7 @@ func NewSearchClient(fileWriter *file.FileWriter, noFalsePositive bool) modules.
 
 	return &searchClient{
 		fileWriter:           fileWriter,
+		out:                  out,
 		httpClient:           httpClient,
 		noRedirectHTTPClient: &noRedirectHTTPClient,
 		noFalsePositive:      noFalsePositive,
@@ -79,7 +86,12 @@ func (sc *searchClient) Search(ctx context.Context, query string) (*modules.Resu
 		return nil, fmt.Errorf("%s(searchDomain): search domain: %w", sc.Name(), err)
 	}
 
-	sites, uncertainSites, err := sc.searchSite(ctx, query)
+	resources, err := sc.buildResources(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s(buildResources): %w", sc.Name(), err)
+	}
+
+	sites, uncertainSites, err := sc.searchSite(ctx, query, resources.Websites)
 	if err != nil {
 		return nil, fmt.Errorf("%s(searchSite): search site: %w", sc.Name(), err)
 	}
@@ -108,7 +120,7 @@ func (sc *searchClient) Search(ctx context.Context, query string) (*modules.Resu
 	}
 
 	if err := sc.fileWriter.Write(query, buffer.String()); err != nil {
-		theme.Redf("[!] Could not write output file: %v", err).Println()
+		theme.Redf("[!] Could not write output file: %v", err).Fprintln(sc.out)
 	}
 
 	summary := fmt.Sprintf("%d domain(s), %d site(s) found", len(domains), len(sites))
@@ -130,7 +142,7 @@ func (sc *searchClient) searchDomain(ctx context.Context, query string) ([]strin
 		return nil, err
 	}
 
-	theme.Cyanf("[*] Searching %d domain(s) for %s...", len(domains), query).Println()
+	theme.Cyanf("[*] Searching %d domain(s) for %s...", len(domains), query).Fprintln(sc.out)
 
 	var (
 		mu sync.Mutex
@@ -196,14 +208,14 @@ func (sc *searchClient) searchDomain(ctx context.Context, query string) ([]strin
 	slices.Sort(foundDomains)
 
 	if len(foundDomains) == 0 {
-		theme.Redf("[-] No domains found with the query %s", query).Println()
+		theme.Redf("[-] No domains found with the query %s", query).Fprintln(sc.out)
 		return nil, nil
 	}
 
-	theme.Greenf("[+] Found %d domains with the query %s", len(foundDomains), query).Println()
+	theme.Greenf("[+] Found %d domains with the query %s", len(foundDomains), query).Fprintln(sc.out)
 
 	for index, domain := range foundDomains {
-		theme.Greenf(":: %03d :: %s", index+1, domain).Println()
+		theme.Greenf(":: %03d :: %s", index+1, domain).Fprintln(sc.out)
 	}
 
 	return foundDomains, nil
@@ -241,13 +253,8 @@ func (sc *searchClient) buildDomains(field string) ([]string, error) {
 
 // searchSite returns the sites where the query was found, and the sites with
 // errorType "unknown" that can't be verified and need a manual check
-func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string, []string, error) {
-	sites, err := sc.buildResources(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	theme.Cyanf("[*] Searching %d site(s) for %s...", len(sites.Websites), query).Println()
+func (sc *searchClient) searchSite(ctx context.Context, query string, sites []website) ([]string, []string, error) {
+	theme.Cyanf("[*] Searching %d site(s) for %s...", len(sites), query).Fprintln(sc.out)
 
 	var (
 		mu sync.Mutex
@@ -261,7 +268,7 @@ func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string,
 		failedProbes int
 	)
 
-	for _, site := range sites.Websites {
+	for _, site := range sites {
 		wg.Go(func() {
 			// query can't be a subdomain here (e.g. contains '.' or '/'), so the site can't host it
 			if !sc.canBuildSiteURL(site.BaseURL, query) ||
@@ -272,7 +279,7 @@ func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string,
 
 			url, err := sc.buildSiteURL(site.BaseURL, query)
 			if err != nil {
-				theme.Redf("search: build site URL for %s: %v", site.Name, err).Println()
+				theme.Redf("search: build site URL for %s: %v", site.Name, err).Fprintln(sc.out)
 				return
 			}
 
@@ -290,14 +297,17 @@ func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string,
 			if site.URLProbe != "" {
 				probeURL, err = sc.buildSiteURL(site.URLProbe, query)
 				if err != nil {
-					theme.Redf("search: build probe URL for %s: %v", site.Name, err).Println()
+					theme.Redf("search: build probe URL for %s: %v", site.Name, err).Fprintln(sc.out)
 					return
 				}
 			}
 
-			request, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, nil)
+			probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+			defer cancel()
+
+			request, err := http.NewRequestWithContext(probeCtx, http.MethodGet, probeURL, nil)
 			if err != nil {
-				theme.Redf("search: create request for %s: %v", probeURL, err).Println()
+				theme.Redf("search: create request for %s: %v", probeURL, err).Fprintln(sc.out)
 				return
 			}
 
@@ -349,26 +359,30 @@ func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string,
 				return
 			}
 
+			var body string
+			if site.ErrorType == "errorMsg" || site.ErrorType == "profilePresence" {
+				raw, err := io.ReadAll(response.Body)
+				if err != nil {
+					if ctx.Err() == nil {
+						mu.Lock()
+						failedProbes++
+						mu.Unlock()
+					}
+					return
+				}
+				body = string(raw)
+			}
+
 			var found bool
 			switch site.ErrorType {
 			case "status_code":
 				found = response.StatusCode != site.ErrorCode
 
 			case "errorMsg":
-				body, err := io.ReadAll(response.Body)
-				if err != nil {
-					return
-				}
-
-				found = !strings.Contains(string(body), site.ErrorMsg)
+				found = !strings.Contains(body, site.ErrorMsg)
 
 			case "profilePresence":
-				body, err := io.ReadAll(response.Body)
-				if err != nil {
-					return
-				}
-
-				found = strings.Contains(string(body), site.ErrorMsg)
+				found = strings.Contains(body, site.ErrorMsg)
 
 			case "response_url":
 				notFoundURL, err := sc.buildSiteURL(site.ResponseURL, query)
@@ -394,27 +408,27 @@ func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string,
 	slices.Sort(uncertainSites)
 
 	if failedProbes > 0 {
-		theme.Yellowf("[!] %d site(s) could not be checked (rate limited, server error or timeout)", failedProbes).Println()
+		theme.Yellowf("[!] %d site(s) could not be checked (rate limited, server error or timeout)", failedProbes).Fprintln(sc.out)
 	}
 
 	if len(foundSites) == 0 && len(uncertainSites) == 0 {
-		theme.Redf("[-] No sites found with the query %s", query).Println()
+		theme.Redf("[-] No sites found with the query %s", query).Fprintln(sc.out)
 		return nil, nil, nil
 	}
 
 	if len(foundSites) > 0 {
-		theme.Greenf("[+] Found %d sites with the query %s", len(foundSites), query).Println()
+		theme.Greenf("[+] Found %d sites with the query %s", len(foundSites), query).Fprintln(sc.out)
 
 		for index, site := range foundSites {
-			theme.Greenf(":: %03d :: %s", index+1, site).Println()
+			theme.Greenf(":: %03d :: %s", index+1, site).Fprintln(sc.out)
 		}
 	}
 
 	if len(uncertainSites) > 0 {
-		theme.Yellowf("[?] %d unverified sites for the query %s (manual check required)", len(uncertainSites), query).Println()
+		theme.Yellowf("[?] %d unverified sites for the query %s (manual check required)", len(uncertainSites), query).Fprintln(sc.out)
 
 		for index, site := range uncertainSites {
-			theme.Yellowf(":: %03d :: %s", index+1, site).Println()
+			theme.Yellowf(":: %03d :: %s", index+1, site).Fprintln(sc.out)
 		}
 	}
 
@@ -447,7 +461,7 @@ func (sc *searchClient) buildResources(ctx context.Context) (*resource, error) {
 			return nil, ctxErr
 		}
 
-		theme.Yellowf("[!] Failed to download data.json (%v), using local copy instead...", err).Println()
+		theme.Yellowf("[!] Failed to download data.json (%v), using local copy instead...", err).Fprintln(sc.out)
 		body, err = os.ReadFile("data.json")
 	}
 
