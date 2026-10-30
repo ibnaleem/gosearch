@@ -1,9 +1,11 @@
 package search
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,7 +29,8 @@ func TestSearchSiteGivesUpOnHangingSite(t *testing.T) {
 	defer func(old time.Duration) { probeTimeout = old }(probeTimeout)
 	probeTimeout = 200 * time.Millisecond
 
-	sc := &searchClient{httpClient: config.NewHTTPClient(), noRedirectHTTPClient: config.NewHTTPClient()}
+	var out bytes.Buffer
+	sc := &searchClient{out: &out, httpClient: config.NewHTTPClient(), noRedirectHTTPClient: config.NewHTTPClient()}
 	sites := []website{
 		{Name: "hang", BaseURL: hanging.URL + "/{}", ErrorType: "status_code"},
 		{Name: "live", BaseURL: live.URL + "/{}", ErrorType: "status_code"},
@@ -45,5 +48,8 @@ func TestSearchSiteGivesUpOnHangingSite(t *testing.T) {
 	}
 	if len(found) != 1 || found[0] != live.URL+"/john" {
 		t.Fatalf("found = %v, want only the live site", found)
+	}
+	if !strings.Contains(out.String(), "Searching 2 site(s)") {
+		t.Fatalf("output = %q, want the progress line in the given writer", out.String())
 	}
 }
