@@ -23,16 +23,38 @@ tests/tests.exe
 go.work
 go.work.sum
 
-# env file
+# Environment & secrets
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*credentials*.json
+*serviceaccount*.json
+.aws/
+.gcloud/
+.ssh/
+*.pfx
+secrets/
+.netrc
+_netrc
+.gnupg/
+.wakatime*.cfg
+.popsql.json
 
 .DS_Store
-
 
 # development folders
 lab
 tmp
-
+.local/
+.logs/
+.venv/
+node_modules/
+.vscode/
+.jupyter/
+.keras/
 
 # binaries
 src/gosearch
@@ -43,11 +65,42 @@ tests/*.txt
 src/*.txt
 *.txt
 
-# Claude Code and other local agent tooling
+# Claude Code
 CLAUDE.md
 AGENTS.md
 .claude/
+.claude.*
+.mcp.*
+
+
+# OpenClaw workspace files
+openclaw.*
+.openclaw/
+.openclaw.*
+BOOTSTRAP.md
+HEARTBEAT.md
+IDENTITY.md
+USER.md
+TOOLS.md
+SOUL.md
+AGENTS.md
+MEMORY.md
+
+
+# other ai
 .trail/
 .serena/
 opencode.json
 .remember/
+.hermes/
+.agents/
+.graft/
+.headroom/
+.ollama/
+.omp/
+.cursor/
+.copilot/
+.ghcp-appmod/
+.cagent/
+.firecrawl/
+skills-lock.json
