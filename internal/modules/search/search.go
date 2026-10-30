@@ -24,6 +24,7 @@ import (
 
 type searchClient struct {
 	fileWriter           *file.FileWriter
+	out                  io.Writer
 	httpClient           *http.Client
 	noRedirectHTTPClient *http.Client
 	noFalsePositive      bool
@@ -58,7 +59,7 @@ var probeTimeout = 15 * time.Second
 // a query used as a subdomain must be a single DNS label (RFC 1123)
 var dnsLabel = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
 
-func NewSearchClient(fileWriter *file.FileWriter, noFalsePositive bool) modules.Module {
+func NewSearchClient(out io.Writer, fileWriter *file.FileWriter, noFalsePositive bool) modules.Module {
 	httpClient := config.NewHTTPClient()
 
 	noRedirectHTTPClient := *httpClient
@@ -68,6 +69,7 @@ func NewSearchClient(fileWriter *file.FileWriter, noFalsePositive bool) modules.
 
 	return &searchClient{
 		fileWriter:           fileWriter,
+		out:                  out,
 		httpClient:           httpClient,
 		noRedirectHTTPClient: &noRedirectHTTPClient,
 		noFalsePositive:      noFalsePositive,
@@ -118,7 +120,7 @@ func (sc *searchClient) Search(ctx context.Context, query string) (*modules.Resu
 	}
 
 	if err := sc.fileWriter.Write(query, buffer.String()); err != nil {
-		theme.Redf("[!] Could not write output file: %v", err).Println()
+		theme.Redf("[!] Could not write output file: %v", err).Fprintln(sc.out)
 	}
 
 	summary := fmt.Sprintf("%d domain(s), %d site(s) found", len(domains), len(sites))
@@ -140,7 +142,7 @@ func (sc *searchClient) searchDomain(ctx context.Context, query string) ([]strin
 		return nil, err
 	}
 
-	theme.Cyanf("[*] Searching %d domain(s) for %s...", len(domains), query).Println()
+	theme.Cyanf("[*] Searching %d domain(s) for %s...", len(domains), query).Fprintln(sc.out)
 
 	var (
 		mu sync.Mutex
@@ -206,14 +208,14 @@ func (sc *searchClient) searchDomain(ctx context.Context, query string) ([]strin
 	slices.Sort(foundDomains)
 
 	if len(foundDomains) == 0 {
-		theme.Redf("[-] No domains found with the query %s", query).Println()
+		theme.Redf("[-] No domains found with the query %s", query).Fprintln(sc.out)
 		return nil, nil
 	}
 
-	theme.Greenf("[+] Found %d domains with the query %s", len(foundDomains), query).Println()
+	theme.Greenf("[+] Found %d domains with the query %s", len(foundDomains), query).Fprintln(sc.out)
 
 	for index, domain := range foundDomains {
-		theme.Greenf(":: %03d :: %s", index+1, domain).Println()
+		theme.Greenf(":: %03d :: %s", index+1, domain).Fprintln(sc.out)
 	}
 
 	return foundDomains, nil
@@ -252,7 +254,7 @@ func (sc *searchClient) buildDomains(field string) ([]string, error) {
 // searchSite returns the sites where the query was found, and the sites with
 // errorType "unknown" that can't be verified and need a manual check
 func (sc *searchClient) searchSite(ctx context.Context, query string, sites []website) ([]string, []string, error) {
-	theme.Cyanf("[*] Searching %d site(s) for %s...", len(sites), query).Println()
+	theme.Cyanf("[*] Searching %d site(s) for %s...", len(sites), query).Fprintln(sc.out)
 
 	var (
 		mu sync.Mutex
@@ -277,7 +279,7 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 
 			url, err := sc.buildSiteURL(site.BaseURL, query)
 			if err != nil {
-				theme.Redf("search: build site URL for %s: %v", site.Name, err).Println()
+				theme.Redf("search: build site URL for %s: %v", site.Name, err).Fprintln(sc.out)
 				return
 			}
 
@@ -295,7 +297,7 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 			if site.URLProbe != "" {
 				probeURL, err = sc.buildSiteURL(site.URLProbe, query)
 				if err != nil {
-					theme.Redf("search: build probe URL for %s: %v", site.Name, err).Println()
+					theme.Redf("search: build probe URL for %s: %v", site.Name, err).Fprintln(sc.out)
 					return
 				}
 			}
@@ -305,7 +307,7 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 
 			request, err := http.NewRequestWithContext(probeCtx, http.MethodGet, probeURL, nil)
 			if err != nil {
-				theme.Redf("search: create request for %s: %v", probeURL, err).Println()
+				theme.Redf("search: create request for %s: %v", probeURL, err).Fprintln(sc.out)
 				return
 			}
 
@@ -402,27 +404,27 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 	slices.Sort(uncertainSites)
 
 	if failedProbes > 0 {
-		theme.Yellowf("[!] %d site(s) could not be checked (rate limited, server error or timeout)", failedProbes).Println()
+		theme.Yellowf("[!] %d site(s) could not be checked (rate limited, server error or timeout)", failedProbes).Fprintln(sc.out)
 	}
 
 	if len(foundSites) == 0 && len(uncertainSites) == 0 {
-		theme.Redf("[-] No sites found with the query %s", query).Println()
+		theme.Redf("[-] No sites found with the query %s", query).Fprintln(sc.out)
 		return nil, nil, nil
 	}
 
 	if len(foundSites) > 0 {
-		theme.Greenf("[+] Found %d sites with the query %s", len(foundSites), query).Println()
+		theme.Greenf("[+] Found %d sites with the query %s", len(foundSites), query).Fprintln(sc.out)
 
 		for index, site := range foundSites {
-			theme.Greenf(":: %03d :: %s", index+1, site).Println()
+			theme.Greenf(":: %03d :: %s", index+1, site).Fprintln(sc.out)
 		}
 	}
 
 	if len(uncertainSites) > 0 {
-		theme.Yellowf("[?] %d unverified sites for the query %s (manual check required)", len(uncertainSites), query).Println()
+		theme.Yellowf("[?] %d unverified sites for the query %s (manual check required)", len(uncertainSites), query).Fprintln(sc.out)
 
 		for index, site := range uncertainSites {
-			theme.Yellowf(":: %03d :: %s", index+1, site).Println()
+			theme.Yellowf(":: %03d :: %s", index+1, site).Fprintln(sc.out)
 		}
 	}
 
@@ -455,7 +457,7 @@ func (sc *searchClient) buildResources(ctx context.Context) (*resource, error) {
 			return nil, ctxErr
 		}
 
-		theme.Yellowf("[!] Failed to download data.json (%v), using local copy instead...", err).Println()
+		theme.Yellowf("[!] Failed to download data.json (%v), using local copy instead...", err).Fprintln(sc.out)
 		body, err = os.ReadFile("data.json")
 	}
 
