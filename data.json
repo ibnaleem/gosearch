@@ -1890,6 +1890,44 @@
       "base_url":"https://hoodri.ch/{}",
       "follow_redirects": true,
       "errorType":"status_code"
+    },
+    {
+      "name": "Hugging Face",
+      "base_url": "https://huggingface.co/{}",
+      "follow_redirects": true,
+      "errorType": "status_code"
+    },
+    {
+      "name": "crates.io",
+      "base_url": "https://crates.io/users/{}",
+      "url_probe": "https://crates.io/api/v1/users/{}",
+      "follow_redirects": true,
+      "errorType": "status_code"
+    },
+    {
+      "name": "Hex",
+      "base_url": "https://hex.pm/users/{}",
+      "url_probe": "https://hex.pm/api/users/{}",
+      "follow_redirects": true,
+      "errorType": "status_code"
+    },
+    {
+      "name": "NuGet",
+      "base_url": "https://www.nuget.org/profiles/{}",
+      "follow_redirects": true,
+      "errorType": "status_code"
+    },
+    {
+      "name": "Pixelfed",
+      "base_url": "https://pixelfed.social/{}",
+      "follow_redirects": true,
+      "errorType": "status_code"
+    },
+    {
+      "name": "Exercism",
+      "base_url": "https://exercism.org/profiles/{}",
+      "follow_redirects": true,
+      "errorType": "status_code"
     }
     ]
 }
