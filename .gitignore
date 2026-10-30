@@ -43,5 +43,11 @@ tests/*.txt
 src/*.txt
 *.txt
 
-# Claude Code
+# Claude Code and other local agent tooling
 CLAUDE.md
+AGENTS.md
+.claude/
+.trail/
+.serena/
+opencode.json
+.remember/
