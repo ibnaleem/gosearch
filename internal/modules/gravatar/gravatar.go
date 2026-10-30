@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -17,6 +18,7 @@ import (
 
 type gravatarClient struct {
 	fileWriter *file.FileWriter
+	out        io.Writer
 	httpClient *http.Client
 }
 
@@ -46,11 +48,12 @@ type gravatarUserAccounts struct {
 	Name     string `json:"name"`
 }
 
-func NewGravatarClient(fileWriter *file.FileWriter) modules.Module {
+func NewGravatarClient(out io.Writer, fileWriter *file.FileWriter) modules.Module {
 	httpClient := config.NewHTTPClient()
 
 	return &gravatarClient{
 		fileWriter: fileWriter,
+		out:        out,
 		httpClient: httpClient,
 	}
 }
@@ -60,12 +63,12 @@ func (gc *gravatarClient) Name() string {
 }
 
 func (gc *gravatarClient) Search(ctx context.Context, query string) (*modules.Result, error) {
-	theme.Cyanf("[*] Searching %s on Gravatar...", query).Println()
+	theme.Cyanf("[*] Searching %s on Gravatar...", query).Fprintln(gc.out)
 
 	response, err := gc.buildRequest(ctx, query)
 	if err != nil {
 		if errors.Is(err, errGravatarUserNotFound) {
-			theme.Redf("[-] No Gravatar profile found for %s", query).Println()
+			theme.Redf("[-] No Gravatar profile found for %s", query).Fprintln(gc.out)
 			return nil, nil
 		}
 
@@ -79,31 +82,31 @@ func (gc *gravatarClient) Search(ctx context.Context, query string) (*modules.Re
 			return nil, ctxErr
 		}
 
-		theme.Greenf("[+] Gravatar username found: %s", entry.Username).Println()
+		theme.Greenf("[+] Gravatar username found: %s", entry.Username).Fprintln(gc.out)
 		fmt.Fprintf(&buffer, "[+] Gravatar username found: %s\n", entry.Username)
 
 		if entry.DisplayName != "" {
-			theme.Greenf(":: %03d :: %-18s : %s", index+1, "Display name", entry.DisplayName).Println()
+			theme.Greenf(":: %03d :: %-18s : %s", index+1, "Display name", entry.DisplayName).Fprintln(gc.out)
 			fmt.Fprintf(&buffer, ":: %03d :: %-18s : %s\n", index+1, "Display name", entry.DisplayName)
 		}
 
 		if entry.PreferredUsername != "" && entry.Username != entry.PreferredUsername {
-			theme.Greenf("          %-18s : %s", "Preferred username", entry.PreferredUsername).Println()
+			theme.Greenf("          %-18s : %s", "Preferred username", entry.PreferredUsername).Fprintln(gc.out)
 			fmt.Fprintf(&buffer, "          %-18s : %s\n", "Preferred username", entry.PreferredUsername)
 		}
 
 		if entry.AboutMe != "" {
-			theme.Greenf("          %-18s : %s", "About Me", entry.AboutMe).Println()
+			theme.Greenf("          %-18s : %s", "About Me", entry.AboutMe).Fprintln(gc.out)
 			fmt.Fprintf(&buffer, "          %-18s : %s\n", "About Me", entry.AboutMe)
 		}
 
 		if len(entry.Emails) == 0 {
-			theme.Greenf("          %-18s : %s", "SHA256 Email Hash", entry.EmailHash).Println()
-			theme.Green("          Hashcat command to crack this hash:").Println()
-			theme.Greenf("          hashcat -m 1400 -a 0 %s facebook-firstnames.txt -r rules/MISC/emails-combined.rule --bitmap-max 28", entry.EmailHash).Println()
-			theme.Green("          Hashcat rules can be found @ https://github.com/ibnaleem/rules").Println()
-			theme.Green("          Wordlists can be found @ https://weakpass.com/wordlists?name=name").Println()
-			theme.Green("          You could also submit this hash to Hashmob.net if you cannot crack it").Println()
+			theme.Greenf("          %-18s : %s", "SHA256 Email Hash", entry.EmailHash).Fprintln(gc.out)
+			theme.Green("          Hashcat command to crack this hash:").Fprintln(gc.out)
+			theme.Greenf("          hashcat -m 1400 -a 0 %s facebook-firstnames.txt -r rules/MISC/emails-combined.rule --bitmap-max 28", entry.EmailHash).Fprintln(gc.out)
+			theme.Green("          Hashcat rules can be found @ https://github.com/ibnaleem/rules").Fprintln(gc.out)
+			theme.Green("          Wordlists can be found @ https://weakpass.com/wordlists?name=name").Fprintln(gc.out)
+			theme.Green("          You could also submit this hash to Hashmob.net if you cannot crack it").Fprintln(gc.out)
 
 			fmt.Fprintf(&buffer, "          %-18s : %s\n", "SHA256 Email Hash", entry.EmailHash)
 			fmt.Fprintf(&buffer, "          Hashcat command to crack this hash:\n")
@@ -114,10 +117,10 @@ func (gc *gravatarClient) Search(ctx context.Context, query string) (*modules.Re
 		}
 
 		if len(entry.Emails) > 0 {
-			theme.Greenf("[+] Email(s) found for %s:", entry.Username).Println()
+			theme.Greenf("[+] Email(s) found for %s:", entry.Username).Fprintln(gc.out)
 			fmt.Fprintf(&buffer, "[+] Email(s) found for %s:\n", entry.Username)
 			for _, email := range entry.Emails {
-				theme.Greenf("          %s", email.Email).Println()
+				theme.Greenf("          %s", email.Email).Fprintln(gc.out)
 				fmt.Fprintf(&buffer, "          %s\n", email.Email)
 			}
 		}
@@ -126,12 +129,12 @@ func (gc *gravatarClient) Search(ctx context.Context, query string) (*modules.Re
 			continue
 		}
 
-		theme.Greenf("[+] Account(s) found for %s:", entry.Username).Println()
+		theme.Greenf("[+] Account(s) found for %s:", entry.Username).Fprintln(gc.out)
 		fmt.Fprintf(&buffer, "[+] Account(s) found for %s:\n", entry.Username)
 		for _, account := range entry.Accounts {
-			theme.Greenf("          %-11s : %s", "Platform", account.Name).Println()
-			theme.Greenf("          %-11s : %s", "Account URL", account.URL).Println()
-			theme.Greenf("          %-11s : %s", "Username", account.Username).Println()
+			theme.Greenf("          %-11s : %s", "Platform", account.Name).Fprintln(gc.out)
+			theme.Greenf("          %-11s : %s", "Account URL", account.URL).Fprintln(gc.out)
+			theme.Greenf("          %-11s : %s", "Username", account.Username).Fprintln(gc.out)
 
 			fmt.Fprintf(&buffer, "          %-11s : %s\n", "Platform", account.Name)
 			fmt.Fprintf(&buffer, "          %-11s : %s\n", "Account URL", account.URL)
@@ -140,7 +143,7 @@ func (gc *gravatarClient) Search(ctx context.Context, query string) (*modules.Re
 	}
 
 	if err := gc.fileWriter.Write(query, buffer.String()); err != nil {
-		theme.Redf("[!] Could not write output file: %v", err).Println()
+		theme.Redf("[!] Could not write output file: %v", err).Fprintln(gc.out)
 	}
 
 	result := modules.Result{
