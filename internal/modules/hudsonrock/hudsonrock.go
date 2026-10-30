@@ -3,6 +3,7 @@ package hudsonrock
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 type hudsonRockClient struct {
 	fileWriter *file.FileWriter
+	out        io.Writer
 	httpClient *http.Client
 }
 
@@ -37,11 +39,12 @@ type stealer struct {
 	TopLogins              []string `json:"top_logins"`
 }
 
-func NewHudsonRockClient(fileWriter *file.FileWriter) modules.Module {
+func NewHudsonRockClient(out io.Writer, fileWriter *file.FileWriter) modules.Module {
 	httpClient := config.NewHTTPClient()
 
 	return &hudsonRockClient{
 		fileWriter: fileWriter,
+		out:        out,
 		httpClient: httpClient,
 	}
 }
@@ -51,7 +54,7 @@ func (hrc *hudsonRockClient) Name() string {
 }
 
 func (hrc *hudsonRockClient) Search(ctx context.Context, query string) (*modules.Result, error) {
-	theme.Cyanf("[*] Searching %s on HudsonRock...", query).Println()
+	theme.Cyanf("[*] Searching %s on HudsonRock...", query).Fprintln(hrc.out)
 
 	response, err := hrc.buildRequest(ctx, query)
 	if err != nil {
@@ -59,13 +62,13 @@ func (hrc *hudsonRockClient) Search(ctx context.Context, query string) (*modules
 	}
 
 	if len(response.Stealers) == 0 {
-		theme.Redf("[-] No HudsonRock profile found for %s", query).Println()
+		theme.Redf("[-] No HudsonRock profile found for %s", query).Fprintln(hrc.out)
 		return nil, nil
 	}
 
 	var buffer strings.Builder
 
-	theme.Greenf("[+] Found %d info-stealer infection(s) for %s:", len(response.Stealers), query).Println()
+	theme.Greenf("[+] Found %d info-stealer infection(s) for %s:", len(response.Stealers), query).Fprintln(hrc.out)
 	fmt.Fprintf(&buffer, "[+] Found %d info-stealer infection(s) for %s:\n", len(response.Stealers), query)
 
 	for index, entry := range response.Stealers {
@@ -73,17 +76,17 @@ func (hrc *hudsonRockClient) Search(ctx context.Context, query string) (*modules
 			return nil, ctxErr
 		}
 
-		theme.Greenf(":: %03d :: %-18s : %s", index+1, "Stealer Family", entry.StealerFamily).Println()
-		theme.Greenf("          %-18s : %s", "Date Compromised", entry.DateCompromised).Println()
-		theme.Greenf("          %-18s : %s", "Computer Name", entry.ComputerName).Println()
-		theme.Greenf("          %-18s : %s", "Operating System", entry.OperatingSystem).Println()
-		theme.Greenf("          %-18s : %s", "IP", entry.IP).Println()
-		theme.Greenf("          %-18s : %s", "Malware Path", strings.TrimSpace(entry.MalwarePath)).Println()
-		theme.Greenf("          %-18s : %v", "Antiviruses", entry.Antiviruses).Println()
-		theme.Greenf("          %-18s : %d", "Corporate Services", entry.TotalCorporateServices).Println()
-		theme.Greenf("          %-18s : %d", "User Services", entry.TotalUserServices).Println()
-		theme.Greenf("          %-18s : %s", "Top Passwords", strings.Join(entry.TopPasswords, ", ")).Println()
-		theme.Greenf("          %-18s : %s", "Top Logins", strings.Join(entry.TopLogins, ", ")).Println()
+		theme.Greenf(":: %03d :: %-18s : %s", index+1, "Stealer Family", entry.StealerFamily).Fprintln(hrc.out)
+		theme.Greenf("          %-18s : %s", "Date Compromised", entry.DateCompromised).Fprintln(hrc.out)
+		theme.Greenf("          %-18s : %s", "Computer Name", entry.ComputerName).Fprintln(hrc.out)
+		theme.Greenf("          %-18s : %s", "Operating System", entry.OperatingSystem).Fprintln(hrc.out)
+		theme.Greenf("          %-18s : %s", "IP", entry.IP).Fprintln(hrc.out)
+		theme.Greenf("          %-18s : %s", "Malware Path", strings.TrimSpace(entry.MalwarePath)).Fprintln(hrc.out)
+		theme.Greenf("          %-18s : %v", "Antiviruses", entry.Antiviruses).Fprintln(hrc.out)
+		theme.Greenf("          %-18s : %d", "Corporate Services", entry.TotalCorporateServices).Fprintln(hrc.out)
+		theme.Greenf("          %-18s : %d", "User Services", entry.TotalUserServices).Fprintln(hrc.out)
+		theme.Greenf("          %-18s : %s", "Top Passwords", strings.Join(entry.TopPasswords, ", ")).Fprintln(hrc.out)
+		theme.Greenf("          %-18s : %s", "Top Logins", strings.Join(entry.TopLogins, ", ")).Fprintln(hrc.out)
 
 		fmt.Fprintf(&buffer, ":: %03d :: %-18s : %s\n", index+1, "Stealer Family", entry.StealerFamily)
 		fmt.Fprintf(&buffer, "          %-18s : %s\n", "Date Compromised", entry.DateCompromised)
@@ -99,7 +102,7 @@ func (hrc *hudsonRockClient) Search(ctx context.Context, query string) (*modules
 	}
 
 	if err := hrc.fileWriter.Write(query, buffer.String()); err != nil {
-		theme.Redf("[!] Could not write output file: %v", err).Println()
+		theme.Redf("[!] Could not write output file: %v", err).Fprintln(hrc.out)
 	}
 
 	result := modules.Result{
