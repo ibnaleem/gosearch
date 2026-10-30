@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -17,6 +18,7 @@ import (
 
 type gitHubClient struct {
 	fileWriter *file.FileWriter
+	out        io.Writer
 	httpClient *http.Client
 }
 
@@ -95,11 +97,12 @@ type gitHubCommitAuthor struct {
 	Name  string `json:"name"`
 }
 
-func NewGitHubClient(fileWriter *file.FileWriter) modules.Module {
+func NewGitHubClient(out io.Writer, fileWriter *file.FileWriter) modules.Module {
 	httpClient := config.NewHTTPClient()
 
 	return &gitHubClient{
 		fileWriter: fileWriter,
+		out:        out,
 		httpClient: httpClient,
 	}
 }
@@ -143,7 +146,7 @@ func (ghc *gitHubClient) Search(ctx context.Context, query string) (*modules.Res
 			return ctxErr
 		}
 
-		theme.Redf("[!] %s %s: %v", ghc.Name(), step, err).Println()
+		theme.Redf("[!] %s %s: %v", ghc.Name(), step, err).Fprintln(ghc.out)
 		failed = append(failed, step)
 
 		return nil
@@ -192,78 +195,78 @@ func (ghc *gitHubClient) Search(ctx context.Context, query string) (*modules.Res
 }
 
 func (ghc *gitHubClient) searchUser(ctx context.Context, query string) (*gitHubUserResponse, error) {
-	theme.Cyanf("[*] Searching %s on Github...", query).Println()
+	theme.Cyanf("[*] Searching %s on Github...", query).Fprintln(ghc.out)
 	response, err := ghc.buildUserRequest(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
 	if response.NodeID == "" {
-		theme.Redf("[-] No Github profile found for %s", query).Println()
+		theme.Redf("[-] No Github profile found for %s", query).Fprintln(ghc.out)
 		return nil, nil
 	}
 
 	var buffer strings.Builder
 
-	theme.Greenf("[+] GitHub username found: %s", query).Println()
+	theme.Greenf("[+] GitHub username found: %s", query).Fprintln(ghc.out)
 	fmt.Fprintf(&buffer, "[+] GitHub username found: %s\n", query)
 
-	theme.Greenf(":: %03d :: %-16s : %s", 1, "Created at", response.CreatedAt).Println()
+	theme.Greenf(":: %03d :: %-16s : %s", 1, "Created at", response.CreatedAt).Fprintln(ghc.out)
 	fmt.Fprintf(&buffer, ":: %03d :: %-16s : %s\n", 1, "Created at", response.CreatedAt)
 
-	theme.Greenf("          %-16s : %s", "Updated at", response.UpdatedAt).Println()
+	theme.Greenf("          %-16s : %s", "Updated at", response.UpdatedAt).Fprintln(ghc.out)
 	fmt.Fprintf(&buffer, "          %-16s : %s\n", "Updated at", response.UpdatedAt)
 
 	if response.Name != "" {
-		theme.Greenf("          %-16s : %s", "Name", response.Name).Println()
+		theme.Greenf("          %-16s : %s", "Name", response.Name).Fprintln(ghc.out)
 		fmt.Fprintf(&buffer, "          %-16s : %s\n", "Name", response.Name)
 	}
 
 	if response.Email != "" {
-		theme.Greenf("          %-16s : %s", "Email", response.Email).Println()
+		theme.Greenf("          %-16s : %s", "Email", response.Email).Fprintln(ghc.out)
 		fmt.Fprintf(&buffer, "          %-16s : %s\n", "Email", response.Email)
 	}
 
 	if response.Location != "" {
-		theme.Greenf("          %-16s : %s", "Current location", response.Location).Println()
+		theme.Greenf("          %-16s : %s", "Current location", response.Location).Fprintln(ghc.out)
 		fmt.Fprintf(&buffer, "          %-16s : %s\n", "Current location", response.Location)
 	}
 
 	if response.Bio != "" {
-		theme.Greenf("          %-16s : %s", "Bio", response.Bio).Println()
+		theme.Greenf("          %-16s : %s", "Bio", response.Bio).Fprintln(ghc.out)
 		fmt.Fprintf(&buffer, "          %-16s : %s\n", "Bio", response.Bio)
 	}
 
 	if response.Company != "" {
-		theme.Greenf("          %-16s : %s", "Current company", response.Company).Println()
+		theme.Greenf("          %-16s : %s", "Current company", response.Company).Fprintln(ghc.out)
 		fmt.Fprintf(&buffer, "          %-16s : %s\n", "Current company", response.Company)
 	}
 
 	if response.Blog != "" {
-		theme.Greenf("          %-16s : %s", "Blog", response.Blog).Println()
+		theme.Greenf("          %-16s : %s", "Blog", response.Blog).Fprintln(ghc.out)
 		fmt.Fprintf(&buffer, "          %-16s : %s\n", "Blog", response.Blog)
 	}
 
 	if response.GravatarID != "" {
-		theme.Greenf("          %-16s : %s", "Gravatar ID", response.GravatarID).Println()
+		theme.Greenf("          %-16s : %s", "Gravatar ID", response.GravatarID).Fprintln(ghc.out)
 		fmt.Fprintf(&buffer, "          %-16s : %s\n", "Gravatar ID", response.GravatarID)
 	}
 
 	if response.TwitterUsername != "" {
-		theme.Greenf("          %-16s : %s", "Twitter username", response.TwitterUsername).Println()
+		theme.Greenf("          %-16s : %s", "Twitter username", response.TwitterUsername).Fprintln(ghc.out)
 		fmt.Fprintf(&buffer, "          %-16s : %s\n", "Twitter username", response.TwitterUsername)
 	}
 
 	if response.AvatarURL != "" {
-		theme.Greenf("          %-16s : %s", "Avatar URL", response.AvatarURL).Println()
+		theme.Greenf("          %-16s : %s", "Avatar URL", response.AvatarURL).Fprintln(ghc.out)
 		fmt.Fprintf(&buffer, "          %-16s : %s\n", "Avatar URL", response.AvatarURL)
 	}
 
-	theme.Greenf("          %-16s : %d", "Public repos", response.PublicRepos).Println()
-	theme.Greenf("          %-16s : %d", "Public gists", response.PublicGists).Println()
-	theme.Greenf("          %-16s : %d", "Followers", response.Followers).Println()
-	theme.Greenf("          %-16s : %d", "Following", response.Following).Println()
-	theme.Greenf("          %-16s : %s", "Node ID", response.NodeID).Println()
+	theme.Greenf("          %-16s : %d", "Public repos", response.PublicRepos).Fprintln(ghc.out)
+	theme.Greenf("          %-16s : %d", "Public gists", response.PublicGists).Fprintln(ghc.out)
+	theme.Greenf("          %-16s : %d", "Followers", response.Followers).Fprintln(ghc.out)
+	theme.Greenf("          %-16s : %d", "Following", response.Following).Fprintln(ghc.out)
+	theme.Greenf("          %-16s : %s", "Node ID", response.NodeID).Fprintln(ghc.out)
 
 	fmt.Fprintf(&buffer, "          %-16s : %d\n", "Public repos", response.PublicRepos)
 	fmt.Fprintf(&buffer, "          %-16s : %d\n", "Public gists", response.PublicGists)
@@ -272,7 +275,7 @@ func (ghc *gitHubClient) searchUser(ctx context.Context, query string) (*gitHubU
 	fmt.Fprintf(&buffer, "          %-16s : %s\n", "Node ID", response.NodeID)
 
 	if err := ghc.fileWriter.Write(query, buffer.String()); err != nil {
-		theme.Redf("[!] Could not write output file: %v", err).Println()
+		theme.Redf("[!] Could not write output file: %v", err).Fprintln(ghc.out)
 	}
 
 	return response, nil
@@ -290,7 +293,7 @@ func (ghc *gitHubClient) buildUserRequest(ctx context.Context, query string) (*g
 }
 
 func (ghc *gitHubClient) searchSocialProfile(ctx context.Context, query string) ([]gitHubSocialAccountResponse, error) {
-	theme.Cyanf("[*] Searching %s on Github for social accounts...", query).Println()
+	theme.Cyanf("[*] Searching %s on Github for social accounts...", query).Fprintln(ghc.out)
 
 	response, err := ghc.buildSocialAccountRequest(ctx, query)
 	if err != nil {
@@ -298,22 +301,22 @@ func (ghc *gitHubClient) searchSocialProfile(ctx context.Context, query string) 
 	}
 
 	if len(response) == 0 {
-		theme.Redf("[-] No social accounts found").Println()
+		theme.Redf("[-] No social accounts found").Fprintln(ghc.out)
 		return nil, nil
 	}
 
 	var buffer strings.Builder
 
-	theme.Greenf("[+] Found %d social account(s):", len(response)).Println()
+	theme.Greenf("[+] Found %d social account(s):", len(response)).Fprintln(ghc.out)
 	fmt.Fprintf(&buffer, "[+] Found %d social account(s):\n", len(response))
 
 	for index, account := range response {
-		theme.Greenf(":: %03d :: %-10s : %s", index+1, account.Provider, account.URL).Println()
+		theme.Greenf(":: %03d :: %-10s : %s", index+1, account.Provider, account.URL).Fprintln(ghc.out)
 		fmt.Fprintf(&buffer, ":: %03d :: %-10s : %s\n", index+1, account.Provider, account.URL)
 	}
 
 	if err := ghc.fileWriter.Write(query, buffer.String()); err != nil {
-		theme.Redf("[!] Could not write output file: %v", err).Println()
+		theme.Redf("[!] Could not write output file: %v", err).Fprintln(ghc.out)
 	}
 
 	return response, nil
@@ -331,7 +334,7 @@ func (ghc *gitHubClient) buildSocialAccountRequest(ctx context.Context, query st
 }
 
 func (ghc *gitHubClient) searchSSHKeys(ctx context.Context, query string) ([]gitHubSSHKeyResponse, error) {
-	theme.Cyanf("[*] Searching %s on Github for SSH keys...", query).Println()
+	theme.Cyanf("[*] Searching %s on Github for SSH keys...", query).Fprintln(ghc.out)
 
 	response, err := ghc.buildSSHKeyRequest(ctx, query)
 	if err != nil {
@@ -339,23 +342,23 @@ func (ghc *gitHubClient) searchSSHKeys(ctx context.Context, query string) ([]git
 	}
 
 	if len(response) == 0 {
-		theme.Redf("[-] No public SSH keys found for %s", query).Println()
+		theme.Redf("[-] No public SSH keys found for %s", query).Fprintln(ghc.out)
 		return nil, nil
 	}
 
 	var buffer strings.Builder
 
-	theme.Greenf("[+] Found %d SSH key(s):", len(response)).Println()
+	theme.Greenf("[+] Found %d SSH key(s):", len(response)).Fprintln(ghc.out)
 	fmt.Fprintf(&buffer, "[+] Found %d SSH key(s):\n", len(response))
 
 	for index, key := range response {
 		keyType := strings.SplitN(key.Key, " ", 2)[0]
-		theme.Greenf(":: %03d :: %-10s : id %d", index+1, keyType, key.ID).Println()
+		theme.Greenf(":: %03d :: %-10s : id %d", index+1, keyType, key.ID).Fprintln(ghc.out)
 		fmt.Fprintf(&buffer, ":: %03d :: %-10s : id %d\n", index+1, keyType, key.ID)
 	}
 
 	if err := ghc.fileWriter.Write(query, buffer.String()); err != nil {
-		theme.Redf("[!] Could not write output file: %v", err).Println()
+		theme.Redf("[!] Could not write output file: %v", err).Fprintln(ghc.out)
 	}
 
 	return response, nil
@@ -373,7 +376,7 @@ func (ghc *gitHubClient) buildSSHKeyRequest(ctx context.Context, query string) (
 }
 
 func (ghc *gitHubClient) searchGPGKey(ctx context.Context, query string) ([]gitHubGPGKeyResponse, error) {
-	theme.Cyanf("[*] Searching %s on Github for GPG keys...", query).Println()
+	theme.Cyanf("[*] Searching %s on Github for GPG keys...", query).Fprintln(ghc.out)
 
 	response, err := ghc.buildGPGKeyRequest(ctx, query)
 	if err != nil {
@@ -381,13 +384,13 @@ func (ghc *gitHubClient) searchGPGKey(ctx context.Context, query string) ([]gitH
 	}
 
 	if len(response) == 0 {
-		theme.Redf("[-] No public GPG keys found for %s", query).Println()
+		theme.Redf("[-] No public GPG keys found for %s", query).Fprintln(ghc.out)
 		return nil, nil
 	}
 
 	var buffer strings.Builder
 
-	theme.Greenf("[+] Found %d GPG key(s):", len(response)).Println()
+	theme.Greenf("[+] Found %d GPG key(s):", len(response)).Fprintln(ghc.out)
 	fmt.Fprintf(&buffer, "[+] Found %d GPG key(s):\n", len(response))
 
 	for index, key := range response {
@@ -396,7 +399,7 @@ func (ghc *gitHubClient) searchGPGKey(ctx context.Context, query string) ([]gitH
 			info = fmt.Sprintf("%s (%s)", key.KeyID, key.Name)
 		}
 
-		theme.Greenf(":: %03d :: %-11s : %s", index+1, "Fingerprint", info).Println()
+		theme.Greenf(":: %03d :: %-11s : %s", index+1, "Fingerprint", info).Fprintln(ghc.out)
 		fmt.Fprintf(&buffer, ":: %03d :: %-11s : %s\n", index+1, "Fingerprint", info)
 
 		for _, email := range key.Emails {
@@ -405,18 +408,18 @@ func (ghc *gitHubClient) searchGPGKey(ctx context.Context, query string) ([]gitH
 				verified = " (verified)"
 			}
 
-			theme.Greenf("          %-11s : %s%s", "Email", email.Email, verified).Println()
+			theme.Greenf("          %-11s : %s%s", "Email", email.Email, verified).Fprintln(ghc.out)
 			fmt.Fprintf(&buffer, "          %-11s : %s%s\n", "Email", email.Email, verified)
 		}
 
 		if key.Revoked {
-			theme.Yellowf("          %-11s : revoked", "Status").Println()
+			theme.Yellowf("          %-11s : revoked", "Status").Fprintln(ghc.out)
 			fmt.Fprintf(&buffer, "          %-11s : revoked\n", "Status")
 		}
 	}
 
 	if err := ghc.fileWriter.Write(query, buffer.String()); err != nil {
-		theme.Redf("[!] Could not write output file: %v", err).Println()
+		theme.Redf("[!] Could not write output file: %v", err).Fprintln(ghc.out)
 	}
 
 	return response, nil
@@ -434,7 +437,7 @@ func (ghc *gitHubClient) buildGPGKeyRequest(ctx context.Context, query string) (
 }
 
 func (ghc *gitHubClient) searchMutualFollowers(ctx context.Context, query string, totalFollowers int) ([]string, error) {
-	theme.Cyanf("[*] Searching %s on Github for mutual followers...", query).Println()
+	theme.Cyanf("[*] Searching %s on Github for mutual followers...", query).Fprintln(ghc.out)
 
 	followers, err := ghc.buildFollowersRequest(ctx, query)
 	if err != nil {
@@ -442,7 +445,7 @@ func (ghc *gitHubClient) searchMutualFollowers(ctx context.Context, query string
 	}
 
 	if len(followers) == 0 {
-		theme.Redf("[-] No followers found for %s", query).Println()
+		theme.Redf("[-] No followers found for %s", query).Fprintln(ghc.out)
 		return nil, nil
 	}
 
@@ -461,7 +464,7 @@ func (ghc *gitHubClient) searchMutualFollowers(ctx context.Context, query string
 			return nil, checkErr
 		}
 
-		theme.Redf("[-] No mutual followers found for %s%s", query, scope).Println()
+		theme.Redf("[-] No mutual followers found for %s%s", query, scope).Fprintln(ghc.out)
 		return nil, nil
 	}
 
@@ -472,16 +475,16 @@ func (ghc *gitHubClient) searchMutualFollowers(ctx context.Context, query string
 		incomplete = " (incomplete, check stopped early)"
 	}
 
-	theme.Greenf("[+] Found %d mutual follower(s)%s%s:", len(mutualFollowers), scope, incomplete).Println()
+	theme.Greenf("[+] Found %d mutual follower(s)%s%s:", len(mutualFollowers), scope, incomplete).Fprintln(ghc.out)
 	fmt.Fprintf(&buffer, "[+] Found %d mutual follower(s)%s%s:\n", len(mutualFollowers), scope, incomplete)
 
 	for index, follower := range mutualFollowers {
-		theme.Greenf(":: %03d :: %s", index+1, follower).Println()
+		theme.Greenf(":: %03d :: %s", index+1, follower).Fprintln(ghc.out)
 		fmt.Fprintf(&buffer, ":: %03d :: %s\n", index+1, follower)
 	}
 
 	if err := ghc.fileWriter.Write(query, buffer.String()); err != nil {
-		theme.Redf("[!] Could not write output file: %v", err).Println()
+		theme.Redf("[!] Could not write output file: %v", err).Fprintln(ghc.out)
 	}
 
 	return mutualFollowers, checkErr
@@ -541,7 +544,7 @@ func (ghc *gitHubClient) buildMutualFollowersRequest(ctx context.Context, query 
 }
 
 func (ghc *gitHubClient) searchEmailFromCommits(ctx context.Context, query string) (map[string]string, error) {
-	theme.Cyanf("[*] Searching %s on Github for emails in public commits...", query).Println()
+	theme.Cyanf("[*] Searching %s on Github for emails in public commits...", query).Fprintln(ghc.out)
 
 	events, err := ghc.buildEventRequest(ctx, query)
 	if err != nil {
@@ -581,7 +584,7 @@ func (ghc *gitHubClient) searchEmailFromCommits(ctx context.Context, query strin
 			return nil, lookupErr
 		}
 
-		theme.Redf("[-] No public commit emails found for %s", query).Println()
+		theme.Redf("[-] No public commit emails found for %s", query).Fprintln(ghc.out)
 		return nil, nil
 	}
 
@@ -598,7 +601,7 @@ func (ghc *gitHubClient) searchEmailFromCommits(ctx context.Context, query strin
 		incomplete = " (incomplete, lookup stopped early)"
 	}
 
-	theme.Greenf("[+] Found %d email(s) in public commits%s:", len(emails), incomplete).Println()
+	theme.Greenf("[+] Found %d email(s) in public commits%s:", len(emails), incomplete).Fprintln(ghc.out)
 	fmt.Fprintf(&buffer, "[+] Found %d email(s) in public commits%s:\n", len(emails), incomplete)
 
 	for index, email := range sortedEmails {
@@ -607,12 +610,12 @@ func (ghc *gitHubClient) searchEmailFromCommits(ctx context.Context, query strin
 			info = fmt.Sprintf("%s (%s)", email, name)
 		}
 
-		theme.Greenf(":: %03d :: %s", index+1, info).Println()
+		theme.Greenf(":: %03d :: %s", index+1, info).Fprintln(ghc.out)
 		fmt.Fprintf(&buffer, ":: %03d :: %s\n", index+1, info)
 	}
 
 	if err := ghc.fileWriter.Write(query, buffer.String()); err != nil {
-		theme.Redf("[!] Could not write output file: %v", err).Println()
+		theme.Redf("[!] Could not write output file: %v", err).Fprintln(ghc.out)
 	}
 
 	return emails, lookupErr
