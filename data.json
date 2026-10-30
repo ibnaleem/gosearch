@@ -551,12 +551,6 @@
       "errorType": "status_code"
     },
     {
-      "name": "PHUCKS",
-      "base_url": "https://phuks.co/u/{}",
-      "follow_redirects": true,
-      "errorType": "status_code"
-    },
-    {
       "name": "Hubski",
       "base_url": "https://hubski.com/user/{}",
       "follow_redirects": true,
