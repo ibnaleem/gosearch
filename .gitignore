@@ -17,7 +17,9 @@ tests/tests.exe
 *.out
 
 # Dependency directories (remove the comment below to include it)
-# vendor/
+vendor/
+.cargo/
+.chocolatey/
 
 # Go workspace file
 go.work
@@ -55,6 +57,8 @@ node_modules/
 .vscode/
 .jupyter/
 .keras/
+.config/
+.cache/
 
 # binaries
 src/gosearch
@@ -75,6 +79,7 @@ AGENTS.md
 
 # OpenClaw workspace files
 openclaw.*
+openclaw
 .openclaw/
 .openclaw.*
 BOOTSTRAP.md
@@ -104,3 +109,4 @@ opencode.json
 .cagent/
 .firecrawl/
 skills-lock.json
+.gateguard/
