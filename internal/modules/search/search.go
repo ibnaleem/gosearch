@@ -359,26 +359,30 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 				return
 			}
 
+			var body string
+			if site.ErrorType == "errorMsg" || site.ErrorType == "profilePresence" {
+				raw, err := io.ReadAll(response.Body)
+				if err != nil {
+					if ctx.Err() == nil {
+						mu.Lock()
+						failedProbes++
+						mu.Unlock()
+					}
+					return
+				}
+				body = string(raw)
+			}
+
 			var found bool
 			switch site.ErrorType {
 			case "status_code":
 				found = response.StatusCode != site.ErrorCode
 
 			case "errorMsg":
-				body, err := io.ReadAll(response.Body)
-				if err != nil {
-					return
-				}
-
-				found = !strings.Contains(string(body), site.ErrorMsg)
+				found = !strings.Contains(body, site.ErrorMsg)
 
 			case "profilePresence":
-				body, err := io.ReadAll(response.Body)
-				if err != nil {
-					return
-				}
-
-				found = strings.Contains(string(body), site.ErrorMsg)
+				found = strings.Contains(body, site.ErrorMsg)
 
 			case "response_url":
 				notFoundURL, err := sc.buildSiteURL(site.ResponseURL, query)
