@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ibnaleem/gosearch/internal/config"
 	"github.com/ibnaleem/gosearch/internal/file"
@@ -49,6 +50,10 @@ type website struct {
 type resource struct {
 	Websites []website `json:"websites"`
 }
+
+// probeTimeout caps one site check; the slowest live site measured answered
+// in 8s, while a dead host otherwise holds the whole search for the 30s client timeout
+var probeTimeout = 15 * time.Second
 
 // a query used as a subdomain must be a single DNS label (RFC 1123)
 var dnsLabel = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
@@ -295,7 +300,10 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 				}
 			}
 
-			request, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, nil)
+			probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+			defer cancel()
+
+			request, err := http.NewRequestWithContext(probeCtx, http.MethodGet, probeURL, nil)
 			if err != nil {
 				theme.Redf("search: create request for %s: %v", probeURL, err).Println()
 				return
