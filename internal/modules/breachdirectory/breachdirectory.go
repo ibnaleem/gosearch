@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -22,6 +23,7 @@ type hashCracker interface {
 
 type breachDirectoryClient struct {
 	fileWriter *file.FileWriter
+	out        io.Writer
 	httpClient *http.Client
 	cracker    hashCracker
 	apiKey     string
@@ -40,11 +42,12 @@ type breachEntry struct {
 	Sources  string `json:"sources"`
 }
 
-func NewBreachDirectoryClient(fileWriter *file.FileWriter, cracker hashCracker, apiKey string) modules.Module {
+func NewBreachDirectoryClient(out io.Writer, fileWriter *file.FileWriter, cracker hashCracker, apiKey string) modules.Module {
 	httpClient := config.NewHTTPClient()
 
 	return &breachDirectoryClient{
 		fileWriter: fileWriter,
+		out:        out,
 		httpClient: httpClient,
 		cracker:    cracker,
 		apiKey:     apiKey,
@@ -61,24 +64,24 @@ func (bdc *breachDirectoryClient) Search(ctx context.Context, query string) (*mo
 	}
 
 	if bdc.apiKey == "" {
-		theme.Yellow("[!] Skipping Breach Directory: no API key provided (use -bd <key>).").Println()
+		theme.Yellow("[!] Skipping Breach Directory: no API key provided (use -bd <key>).").Fprintln(bdc.out)
 		return nil, nil
 	}
 
-	theme.Cyan("[*] Searching ", query, " on Breach Directory for any compromised passwords...").Println()
+	theme.Cyan("[*] Searching ", query, " on Breach Directory for any compromised passwords...").Fprintln(bdc.out)
 	response, err := bdc.buildRequest(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
 	if response.Found == 0 {
-		theme.Redf("[-] No breaches found for %s.", query).Println()
+		theme.Redf("[-] No breaches found for %s.", query).Fprintln(bdc.out)
 		return nil, nil
 	}
 
 	var buffer strings.Builder
 
-	theme.Greenf("[+] Found %d breach(es) for %s:", response.Found, query).Println()
+	theme.Greenf("[+] Found %d breach(es) for %s:", response.Found, query).Fprintln(bdc.out)
 	fmt.Fprintf(&buffer, "[+] Found %d breach(es) for %s:\n", response.Found, query)
 
 	for index, entry := range response.Result {
@@ -88,7 +91,7 @@ func (bdc *breachDirectoryClient) Search(ctx context.Context, query string) (*mo
 
 		cracked, err := bdc.cracker.CrackHash(ctx, entry.Sha1)
 		if err != nil {
-			theme.Yellowf("[!] Could not crack hash: %v", err).Println()
+			theme.Yellowf("[!] Could not crack hash: %v", err).Fprintln(bdc.out)
 		}
 
 		password := entry.Password
@@ -96,9 +99,9 @@ func (bdc *breachDirectoryClient) Search(ctx context.Context, query string) (*mo
 			password = cracked
 		}
 
-		theme.Greenf(":: %03d :: %-9s %s", index+1, "Password:", password).Println()
-		theme.Greenf("          %-9s %s", "SHA1:", entry.Sha1).Println()
-		theme.Greenf("          %-9s %s", "Source:", entry.Sources).Println()
+		theme.Greenf(":: %03d :: %-9s %s", index+1, "Password:", password).Fprintln(bdc.out)
+		theme.Greenf("          %-9s %s", "SHA1:", entry.Sha1).Fprintln(bdc.out)
+		theme.Greenf("          %-9s %s", "Source:", entry.Sources).Fprintln(bdc.out)
 
 		fmt.Fprintf(&buffer, ":: %03d :: %-9s %s\n", index+1, "Password:", password)
 		fmt.Fprintf(&buffer, "          %-9s %s\n", "SHA1:", entry.Sha1)
@@ -106,7 +109,7 @@ func (bdc *breachDirectoryClient) Search(ctx context.Context, query string) (*mo
 	}
 
 	if err := bdc.fileWriter.Write(query, buffer.String()); err != nil {
-		theme.Redf("[!] Could not write output file: %v", err).Println()
+		theme.Redf("[!] Could not write output file: %v", err).Fprintln(bdc.out)
 	}
 
 	result := modules.Result{
