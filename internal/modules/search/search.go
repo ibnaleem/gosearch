@@ -79,7 +79,12 @@ func (sc *searchClient) Search(ctx context.Context, query string) (*modules.Resu
 		return nil, fmt.Errorf("%s(searchDomain): search domain: %w", sc.Name(), err)
 	}
 
-	sites, uncertainSites, err := sc.searchSite(ctx, query)
+	resources, err := sc.buildResources(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s(buildResources): %w", sc.Name(), err)
+	}
+
+	sites, uncertainSites, err := sc.searchSite(ctx, query, resources.Websites)
 	if err != nil {
 		return nil, fmt.Errorf("%s(searchSite): search site: %w", sc.Name(), err)
 	}
@@ -241,13 +246,8 @@ func (sc *searchClient) buildDomains(field string) ([]string, error) {
 
 // searchSite returns the sites where the query was found, and the sites with
 // errorType "unknown" that can't be verified and need a manual check
-func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string, []string, error) {
-	sites, err := sc.buildResources(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	theme.Cyanf("[*] Searching %d site(s) for %s...", len(sites.Websites), query).Println()
+func (sc *searchClient) searchSite(ctx context.Context, query string, sites []website) ([]string, []string, error) {
+	theme.Cyanf("[*] Searching %d site(s) for %s...", len(sites), query).Println()
 
 	var (
 		mu sync.Mutex
@@ -261,7 +261,7 @@ func (sc *searchClient) searchSite(ctx context.Context, query string) ([]string,
 		failedProbes int
 	)
 
-	for _, site := range sites.Websites {
+	for _, site := range sites {
 		wg.Go(func() {
 			// query can't be a subdomain here (e.g. contains '.' or '/'), so the site can't host it
 			if !sc.canBuildSiteURL(site.BaseURL, query) ||
