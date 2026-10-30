@@ -53,3 +53,31 @@ func TestSearchSiteGivesUpOnHangingSite(t *testing.T) {
 		t.Fatalf("output = %q, want the progress line in the given writer", out.String())
 	}
 }
+
+func TestSearchSiteReportsBodyReadTimeoutAsFailedProbe(t *testing.T) {
+	release := make(chan struct{})
+	stalled := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("<html>"))
+		w.(http.Flusher).Flush()
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	defer stalled.Close()
+	defer close(release)
+
+	defer func(old time.Duration) { probeTimeout = old }(probeTimeout)
+	probeTimeout = 200 * time.Millisecond
+
+	var out bytes.Buffer
+	sc := &searchClient{out: &out, httpClient: config.NewHTTPClient(), noRedirectHTTPClient: config.NewHTTPClient()}
+	sites := []website{{Name: "stalled", BaseURL: stalled.URL + "/{}", ErrorType: "errorMsg", ErrorMsg: "not found"}}
+
+	if _, _, err := sc.searchSite(context.Background(), "john", sites); err != nil {
+		t.Fatalf("searchSite error: %v", err)
+	}
+	if !strings.Contains(out.String(), "1 site(s) could not be checked") {
+		t.Fatalf("output = %q, want the stalled site counted as unchecked", out.String())
+	}
+}
