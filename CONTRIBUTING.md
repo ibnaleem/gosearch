@@ -273,7 +273,7 @@ internal/modules/proxynova/
 └── proxynova.go
 ```
 
-When a module does several lookups, give each one its own file, named after what it does. The main file holds the client struct, the constructor, `Name()` and the `Search()` method that calls the others. This is how the GitHub module was laid out:
+When a module does several lookups, give each one its own file, named after what it does. The main file holds the client struct, the constructor, `Name()` and the `Search()` method that calls the others. This is how the GitHub module is laid out:
 
 ```
 internal/modules/github/
@@ -284,8 +284,6 @@ internal/modules/github/
 ├── social-accounts.go      # linked social accounts
 └── mutual-followers.go     # followers who follow back
 ```
-
-The GitHub module is a single `github.go` right now. It will be split back into the layout above, so follow the layout above for new work, not the current file.
 
 Tests follow the same idea. Put them in a `_test.go` file next to the code they cover, named after what they test, like `search/probe_test.go` or `breachdirectory/output_test.go`.
 
