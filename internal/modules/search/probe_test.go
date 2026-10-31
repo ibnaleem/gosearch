@@ -102,6 +102,7 @@ func TestSearchSiteFollowsRedirectsUnlessDisabled(t *testing.T) {
 	}{
 		{`{"name": "default", "base_url": "` + server.URL + `/default/{}", "errorType": "status_code"}`, false},
 		{`{"name": "disabled", "base_url": "` + server.URL + `/disabled/{}", "errorType": "status_code", "follow_redirects": false}`, true},
+		{`{"name": "enabled", "base_url": "` + server.URL + `/enabled/{}", "errorType": "status_code", "follow_redirects": true}`, false},
 	} {
 		var site website
 		if err := json.Unmarshal([]byte(tc.entry), &site); err != nil {
