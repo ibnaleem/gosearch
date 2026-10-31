@@ -1,4 +1,4 @@
-## Contributing
+# Contributing
 
 There are two ways to contribute to `GoSearch`:
 
@@ -20,7 +20,7 @@ Each entry looks like this:
   "name": "Website name",
   "base_url": "https://www.website.com/profiles/{}",
   "url_probe": "optional, see below",
-  "follow_redirects": false,
+  "follow_redirects": true,
   "user_agent": "optional, see below",
   "errorType": "status_code | errorMsg | profilePresence | response_url | unknown",
   "errorMsg": "required for errorMsg and profilePresence",
@@ -46,7 +46,7 @@ The `base_url` is the URL `GoSearch` uses to search for usernames, unless a `url
 Some websites block direct requests but offer an API or another service that returns the same information. Put that URL in `url_probe`. `GoSearch` sends its request to the `url_probe`, but still prints the `base_url` in the terminal, since that is where the profile actually lives.
 
 ### `follow_redirects`
-Redirects are **not** followed by default. A redirect counts as a response like any other, so a site that answers `301` for every username will look like a hit for all of them. Set `"follow_redirects": true` if you need `GoSearch` to land on the final page before it checks the status code or body. Test modes `2` and `3` below show you what the site does without redirects.
+Redirects are followed by default, so `GoSearch` checks the status code and body of the final page. Set `"follow_redirects": false` only when the redirect itself is the signal, for example a site that answers `302` for missing users and `200` for real ones; then put the redirect code in `errorCode`. Test modes `2` and `3` below show you what the site does without redirects.
 
 ### `user_agent`
 `GoSearch` sends a recent Firefox user agent with every request. A few sites only behave with a different one. Set `user_agent` to override it for that site only.
@@ -160,7 +160,7 @@ $ ./tests https://packagist.org/packages/thisdoesnotexist/ 2
 [+] Response: 301 Moved Permanently
 [+] Response URL: https://packagist.org/search/?q=thisdoesnotexist&reason=vendor_not_found
 ```
-The entry for this website looks like this. `response_url` uses `{}` for the username too, and `follow_redirects` has to be `true` so `GoSearch` ends up on the redirect target:
+The entry for this website looks like this. `response_url` uses `{}` for the username too. Don't set `follow_redirects` to `false` here, because `GoSearch` has to end up on the redirect target:
 ```json
 {
   "name": "Packagist",
