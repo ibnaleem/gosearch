@@ -326,7 +326,8 @@ type yourServiceClient struct {
 }
 
 type yourServiceResponse struct {
-    // fields of the service's JSON response
+    Count   int      `json:"count"`
+    Results []string `json:"results"`
 }
 
 func NewYourServiceClient(out io.Writer, fileWriter *file.FileWriter) modules.Module {
@@ -351,14 +352,21 @@ func (ysc *yourServiceClient) Search(ctx context.Context, query string) (*module
         return nil, fmt.Errorf("%s(Search): %w", ysc.Name(), err)
     }
 
-    // on not found:
-    //     theme.Red("[-] Nothing found on YourService for ", query, ".").Fprintln(ysc.out)
-    //     return nil, nil
+    // FetchJSON doesn't treat 404 as an error, so check the decoded fields
+    if response.Count == 0 {
+        theme.Red("[-] Nothing found on YourService for ", query, ".").Fprintln(ysc.out)
+        return nil, nil
+    }
 
     var buffer strings.Builder
 
-    theme.Greenf("[+] Found something: %s", response).Fprintln(ysc.out)
-    fmt.Fprintf(&buffer, "[+] Found something: %s\n", response)
+    theme.Greenf("[+] Found %d result(s) for %s:", response.Count, query).Fprintln(ysc.out)
+    fmt.Fprintf(&buffer, "[+] Found %d result(s) for %s:\n", response.Count, query)
+
+    for _, entry := range response.Results {
+        theme.Greenf("    %s", entry).Fprintln(ysc.out)
+        fmt.Fprintf(&buffer, "    %s\n", entry)
+    }
 
     if err := ysc.fileWriter.Write(query, buffer.String()); err != nil {
         theme.Redf("[!] Could not write output file: %v", err).Fprintln(ysc.out)
@@ -366,7 +374,7 @@ func (ysc *yourServiceClient) Search(ctx context.Context, query string) (*module
 
     return &modules.Result{
         Module:  ysc.Name(),
-        Summary: "1 result found",
+        Summary: fmt.Sprintf("%d result(s) found", response.Count),
     }, nil
 }
 ```
