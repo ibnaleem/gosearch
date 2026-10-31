@@ -239,7 +239,7 @@ $ go test -run TestDataJSON .
 ```
 This catches invalid JSON, unknown keys, duplicate names or URLs, missing `{}` placeholders, and missing `errorMsg` or `response_url` fields.
 
-To see your site in a real run before it's merged, block the `data.json` download (for example by going offline) so `GoSearch` falls back to your local copy, then search for a username you know exists and one you know doesn't:
+To see your site in a real run before it's merged, block `raw.githubusercontent.com` (for example in your hosts file or firewall) so `GoSearch` falls back to your local copy. Don't go fully offline, because the site you're testing still has to be reachable. Then search for a username you know exists and one you know doesn't:
 ```
 $ go run . -u username-exists
 $ go run . -u username-does-not-exist
