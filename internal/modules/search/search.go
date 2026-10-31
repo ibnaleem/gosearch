@@ -39,7 +39,7 @@ type website struct {
 	Name            string   `json:"name"`
 	BaseURL         string   `json:"base_url"`
 	URLProbe        string   `json:"url_probe,omitempty"`
-	FollowRedirects bool     `json:"follow_redirects"`
+	FollowRedirects *bool    `json:"follow_redirects,omitempty"` // nil follows; only an explicit false stops at the first response
 	UserAgent       string   `json:"user_agent,omitempty"`
 	ErrorType       string   `json:"errorType"`
 	ErrorMsg        string   `json:"errorMsg,omitempty"`
@@ -331,7 +331,7 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 			}
 
 			httpClient := sc.httpClient
-			if !site.FollowRedirects {
+			if site.FollowRedirects != nil && !*site.FollowRedirects {
 				httpClient = sc.noRedirectHTTPClient
 			}
 

@@ -1,13 +1,31 @@
-## Contributing
-`GoSearch` relies on the [data.json](https://raw.githubusercontent.com/ibnaleem/gosearch/refs/heads/main/data.json) file which contains a list of websites to search. Users can contribute by adding new sites to expand the tool’s search capabilities. This is where most contributions are needed. The format for adding new sites is as follows:
+# Contributing
+
+There are two ways to contribute to `GoSearch`:
+
+1. [Add a website](#adding-a-website) to `data.json`. This is where most contributions are needed, and you don't need to write any Go.
+2. [Add a module](#contributing-a-module) under `internal/modules/` for sources that need more than a yes/no check on a profile URL.
+
+Bug fixes and improvements to existing modules are welcome too. Whatever you send, run the [checks](#before-you-open-a-pr) first, because CI runs the same ones.
+
+---
+
+## Adding a website
+
+`GoSearch` reads its list of websites from [data.json](https://raw.githubusercontent.com/ibnaleem/gosearch/refs/heads/main/data.json). At startup it downloads the copy on `main`, and only falls back to the local `data.json` if the download fails. So a site you add locally won't show up in a normal run until it is merged; see [Testing your entry](#testing-your-entry) for how to check it before then.
+
+Each entry looks like this:
 
 ```json
 {
   "name": "Website name",
   "base_url": "https://www.website.com/profiles/{}",
   "url_probe": "optional, see below",
-  "errorType": "errorMsg/status_code/profilePresence/unknown",
-  "errorMsg/errorCode": "errorMsg",
+  "follow_redirects": true,
+  "user_agent": "optional, see below",
+  "errorType": "status_code | errorMsg | profilePresence | response_url | unknown",
+  "errorMsg": "required for errorMsg and profilePresence",
+  "errorCode": 404,
+  "response_url": "required for response_url",
   "cookies": [
     {
       "name": "cookie name",
@@ -17,54 +35,65 @@
 }
 ```
 
-Each entry should include a clear and concise website name to facilitate manual searches, helping avoid duplicate submissions.
+Only `name`, `base_url` and `errorType` are always required. Leave out any field you don't use. Unknown keys fail the test suite, so a typo like `"error_type"` gets caught before merge.
+
+Give each entry a clear website name. It makes manual searches easier and helps avoid duplicate submissions. Duplicate names (ignoring case) and duplicate `base_url`s are rejected by the tests.
 
 ### `base_url`
-The `base_url` is the URL `GoSearch` uses to search for usernames, unless a `url_probe` is specified (see [`url_probe`](#url_probe)). Your first task is to identify the location of user profiles on a website. For example, on Twitter, user profiles are located at the root path `/`, so you would set `"base_url": "https://twitter.com/{}"`. The `{}` is a *placeholder* that `GoSearch` will automatically replace with the username when performing the search.
+The `base_url` is the URL `GoSearch` uses to search for usernames, unless a `url_probe` is specified (see [`url_probe`](#url_probe)). Your first task is to find where user profiles live on the website. On Twitter, for example, profiles sit at the root path `/`, so you would set `"base_url": "https://twitter.com/{}"`. The `{}` is a placeholder that `GoSearch` replaces with the username when it searches. Every `base_url` and `url_probe` must contain `{}` and start with `http://` or `https://`.
 
 ### `url_probe`
-In some cases, websites may block direct requests for security reasons but offer an API or alternate service to retrieve the same information. The `url_probe` field is used to specify such an API or service URL that checks username availability. Unlike the `base_url`, which is used to directly search for profile URLs, the `url_probe` generates a different API request, but GoSearch will still display the `base_url` in the terminal instead of the API URL since that is not where the profile lives.
+Some websites block direct requests but offer an API or another service that returns the same information. Put that URL in `url_probe`. `GoSearch` sends its request to the `url_probe`, but still prints the `base_url` in the terminal, since that is where the profile actually lives.
+
+### `follow_redirects`
+Redirects are followed by default, so `GoSearch` checks the status code and body of the final page. Set `"follow_redirects": false` only when the redirect itself is the signal, for example a site that answers `302` for missing users and `200` for real ones; then put the redirect code in `errorCode`. Test modes `2` and `3` below show you what the site does without redirects.
+
+### `user_agent`
+`GoSearch` sends a recent Firefox user agent with every request. A few sites only behave with a different one. Set `user_agent` to override it for that site only.
 
 ### `errorType`
-There are 4 error types
-1. `status_code` - a specific status code that is returned if a username does not exist (typically `404`)
-2. `errorMsg` - a custom error message the website displays that is unique to usernames that do not exist
-3. `profilePresence` a custom message the website displays that is unique to usernames that exist.
-4. `unknown` - when there is no way of ascertaining the difference between a username that exists and does not exist on the website
+There are 5 error types:
+1. `status_code`: the website returns a specific status code when a username does not exist (typically `404`)
+2. `errorMsg`: the website shows an error message that only appears for usernames that do not exist
+3. `profilePresence`: the website shows something that only appears for usernames that do exist
+4. `response_url`: the website redirects missing usernames to a specific URL
+5. `unknown`: there is no way to tell an existing username from a missing one
+
+For every type except `unknown`, a `4xx` response means "not found". A `429` or `5xx` response is counted as a failed probe and reported separately, so a site that rate-limits you doesn't produce false results.
 
 #### `status_code`
-The easiest to contribute, simply find an existing profile and build the test binary:
+The easiest one to contribute. Find an existing profile and build the test binary. It lives in its own Go module under `tests/`:
 ```
 $ git clone https://github.com/ibnaleem/gosearch.git
-$ cd gosearch
-$ cd tests
+$ cd gosearch/tests
 $ go build
 ```
-This will create a `./tests` or `tests.exe` binary, depending on your OS. For `status_code` testing, use the `0` option:
+This creates a `./tests` or `tests.exe` binary, depending on your OS. Run it without arguments to see every mode. For `status_code` testing, use mode `0`:
 ```
 $ ./tests https://yourwebsite.com/username-exists 0
 [*] Testing URL: https://yourwebsite.com/username-exists
 [*] Mode: 0 (Status Code)
 [+] Response: 200 OK
 ```
-Where username is the existing username on the website. Then, make the same request with a username that does not exist on the website:
+Here `username-exists` is a real username on the website. Then make the same request with a username that does not exist:
 ```
 $ ./tests https://yourwebsite.com/username-does-not-exist 0
 [*] Testing URL: https://yourwebsite.com/username-does-not-exist
 [*] Mode: 0 (Status Code)
 [+] Response: 404 Not Found
 ```
-Usually, websites send a `200 OK` for profiles that exist, and a `404 Not Found` for ones that do not exist. In some cases, they may throw a `403 Forbidden`, but it does not matter as long as the status code for an existing profile is always different from non-existing profiles. Set `errorType: status_code` and you're done
+Websites usually send `200 OK` for profiles that exist and `404 Not Found` for ones that don't. Some send `403 Forbidden` instead. That's fine, as long as an existing profile never gets the same status code as a missing one. Set `"errorType": "status_code"` and you're done:
 ```json
 {
   "name": "Your Website",
   "base_url": "https://www.yourwebsite.com/{}",
-  "errorType": "status_code",
+  "errorType": "status_code"
 }
 ```
+`errorCode` is optional. Without it, any `4xx` means "not found". If the site uses a non-`4xx` code for missing users, put that code in `errorCode`. If that code is a redirect (`3xx`), also set `"follow_redirects": false`, otherwise `GoSearch` follows it and never sees the code.
 
 #### `errorMsg`
-When websites always return a consistent status code regardless of the profile's existence, we must inspect the response body for any error messages. Usually, these are in the `<title>` tags but sometimes they can exist elsewhere. Simply pass the URL followed by mode `1`:
+Some websites return the same status code whether the profile exists or not. In that case we have to look at the response body for an error message. It's often inside the `<title>` tag, but it can be anywhere. Pass the URL followed by mode `1`:
 ```
 $ ./tests https://yourwebsite.com/username-exists 1
 [*] Testing URL: https://yourwebsite.com/username-exists
@@ -72,13 +101,14 @@ $ ./tests https://yourwebsite.com/username-exists 1
 [+] Response: 200 OK
 [+] Saved response to response.txt
 ```
-Once again, the first username corresponds to an existing profile, while the second username is for an account that does not exist. Be sure to rename `response.txt` to avoid having my code overwrite it.
+Rename `response.txt` before the next run, otherwise it gets overwritten:
 ```
 $ mv response.txt username_found.txt
 ```
+Now the same for a username that does not exist:
 ```
-$ ./tests https://yourwebsite.com/username-does-not-exists 1
-[*] Testing URL: https://yourwebsite.com/username-does-not-exists
+$ ./tests https://yourwebsite.com/username-does-not-exist 1
+[*] Testing URL: https://yourwebsite.com/username-does-not-exist
 [*] Mode: 1 (Response Body)
 [+] Response: 200 OK
 [+] Saved response to response.txt
@@ -86,28 +116,35 @@ $ ./tests https://yourwebsite.com/username-does-not-exists 1
 ```
 $ mv response.txt username_not_found.txt
 ```
-You’ll need to analyse the response body of `username_not_found.txt` and compare it with `username_found.txt`. Look for any word, phrase, HTML tag, or other unique element that appears only in `username_not_found.txt`. Once you've identified something distinct, add it to the `errorMsg` field under the `errorType` field.
+Compare `username_not_found.txt` with `username_found.txt`. Look for a word, phrase, HTML tag or anything else that only appears in `username_not_found.txt`. Once you've found it, put it in the `errorMsg` field.
 ```
-$ cat username_found.txt | grep "<title>"
+$ grep "<title>" username_found.txt
 <title>Username | Your Website</title>
 ```
 ```
-cat username_not_found.txt | grep "<title>"
+$ grep "<title>" username_not_found.txt
 <title>Your Website</title>
 ```
-In this case, the website's `<title>` tag contains the username of an existing profile, and for non-existing profiles it merely states the website name. Therefore, the `errorMsg` would be `<title>Your Website</title>`:
+Here the `<title>` tag holds the username when the profile exists, and only the website name when it doesn't. So the `errorMsg` is `<title>Your Website</title>`:
 ```json
 {
   "name": "Your Website",
   "base_url": "https://www.yourwebsite.com/{}",
   "errorType": "errorMsg",
-  "errorMsg": "<title>Your Website</title>",
+  "errorMsg": "<title>Your Website</title>"
 }
 ```
+To double-check, run mode `4` against the missing username. It asks for the error message and tells you whether it can find it in the response:
+```
+$ ./tests https://yourwebsite.com/username-does-not-exist 4
+```
+If the page only differs before a redirect, mode `3` saves the body without following redirects. Use what you find there with `"follow_redirects": false`, since `GoSearch` follows redirects otherwise.
+
 #### `profilePresence`
-The exact opposite of `errorMsg`; instead of analysing the `username_not_found.txt`'s response body, analyse the `username_found.txt`'s response body to find any word, phrase, HTML tag or other unique element that only appears in `username_found.txt`. Set `"errorType": "profilePresence"` and set the `errorMsg` to what you've found.
+The exact opposite of `errorMsg`. Instead of studying `username_not_found.txt`, look through `username_found.txt` for a word, phrase, HTML tag or other element that only appears there. Set `"errorType": "profilePresence"` and put what you found in `errorMsg`.
+
 #### `response_url`
-What if there exists no `profilePresence` or `errorMsg` in the response body? Well, another method is capturing the redirect and examining the redirect URL:
+What if the body has nothing usable for `errorMsg` or `profilePresence`? You can capture the redirect and look at where it points, using mode `2`:
 ```
 $ ./tests https://packagist.org/packages/username-exists/ 2
 [*] Testing URL: https://packagist.org/packages/username-exists/
@@ -123,20 +160,21 @@ $ ./tests https://packagist.org/packages/thisdoesnotexist/ 2
 [+] Response: 301 Moved Permanently
 [+] Response URL: https://packagist.org/search/?q=thisdoesnotexist&reason=vendor_not_found
 ```
-The entry for this website would look like this:
+The entry for this website looks like this. `response_url` uses `{}` for the username too. Don't set `follow_redirects` to `false` here, because `GoSearch` has to end up on the redirect target:
 ```json
 {
   "name": "Packagist",
   "base_url": "https://packagist.org/packages/{}/",
-  "follow_redirects": true,
   "errorType": "response_url",
   "response_url": "https://packagist.org/search/?q={}&reason=vendor_not_found"
-},
+}
 ```
-#### `"unknown"`
-Occasionally, the response body may be empty or lack any unique content in both the `username_not_found.txt` and `username_found.txt` files. After trying cookies, using the `www.` subdomain, capturing the redirect, you are left with no answers. In these cases, set the `errorType` to `"unknown"` (as a string).
+
+#### `unknown`
+Sometimes the body is empty, or there's nothing unique in either `username_found.txt` or `username_not_found.txt`. You've tried cookies, the `www.` subdomain and the redirect, and you still can't tell them apart. Set `"errorType": "unknown"`. These sites are listed for a manual check, and users can hide them with `-nfp`.
+
 #### `cookies`
-Some websites may require cookies to retrieve specific data, such as error codes or session information. For example, the website `dzen.ru` requires the cookie `zen_sso_checked=1`, which is included in the request headers when making a browser request. To test for cookies and analyze the response, you can use the following Go code:
+Some websites need cookies before they return a useful status code or body. For example, `dzen.ru` needs the cookie `zen_sso_checked=1`, which your browser sends with every request. To test a cookie and look at the response, you can use this Go program:
 
 ```go
 package main
@@ -151,43 +189,34 @@ import (
 func MakeRequest(url string) {
   client := &http.Client{}
 
-  // Create a new HTTP GET request
   req, err := http.NewRequest("GET", url, nil)
   if err != nil {
     log.Fatalf("Error creating request: %v", err)
   }
 
-  // Create the cookie
-  cookie := &http.Cookie{
+  req.AddCookie(&http.Cookie{
     Name:  "cookie_name",
     Value: "cookie_value",
-  }
+  })
 
-  // Add the cookie to the request
-  req.AddCookie(cookie)
-
-  // Send the request
   resp, err := client.Do(req)
   if err != nil {
     log.Fatalf("Error making request: %v", err)
   }
   defer resp.Body.Close()
 
-  // Output the response status
   fmt.Println("Response Status:", resp.Status)
 }
 
 func main() {
-  // Ensure URL is provided as the first argument
   if len(os.Args) < 2 {
     log.Fatal("URL is required as the first argument.")
   }
-  url := os.Args[1]
-  MakeRequest(url)
+  MakeRequest(os.Args[1])
 }
 ```
 
-When testing cookies, check the response status and body. For example, if you always receive a `200 OK` response, try adding `www.` before the URL, as some websites redirect based on this:
+When testing cookies, check both the status and the body. If you always get `200 OK`, try adding `www.` to the URL, since some websites redirect based on it:
 
 ```
 $ curl -I https://pinterest.com/username
@@ -200,15 +229,29 @@ $ curl -I https://www.pinterest.com/username
 HTTP/2 200
 ```
 
-Additionally, make sure to use the above code to analyse the response body when including the `www.` subdomain and relevant cookies.
+Use the program above to check the response body with the `www.` subdomain and any cookies you need.
 
-To contribute, follow the template above, open a PR, and I'll merge it if `GoSearch` can successfully detect the accounts.
+### Testing your entry
+
+Validate `data.json` from the repository root:
+```
+$ go test -run TestDataJSON .
+```
+This catches invalid JSON, unknown keys, duplicate names or URLs, missing `{}` placeholders, and missing `errorMsg` or `response_url` fields.
+
+To see your site in a real run before it's merged, block `raw.githubusercontent.com` (for example in your hosts file or firewall) so `GoSearch` falls back to your local copy. Don't go fully offline, because the site you're testing still has to be reachable. Then search for a username you know exists and one you know doesn't:
+```
+$ go run . -u username-exists
+$ go run . -u username-does-not-exist
+```
+
+Then open a PR. I'll merge it if `GoSearch` correctly detects both accounts.
 
 ---
 
-## Contributing a Module
+## Contributing a module
 
-Modules are Go packages under `internal/modules/` that integrate external APIs or intelligence sources beyond simple username presence checks. Where `data.json` entries check whether a username exists on a website, modules perform deeper lookups: credential breaches, social graph data, cryptographic keys, email extraction, and so on.
+Modules are Go packages under `internal/modules/` that connect `GoSearch` to external APIs or intelligence sources. A `data.json` entry checks whether a username exists on a website. A module does a deeper lookup: credential breaches, social graph data, cryptographic keys, email extraction, and so on.
 
 ### When to add a module vs a site entry
 
@@ -219,16 +262,30 @@ Modules are Go packages under `internal/modules/` that integrate external APIs o
 | Source requires authentication (API key, token) | Module |
 | Multi-step HTTP logic that `data.json` cannot express | Module |
 
-### Directory structure
+### One file per responsibility
 
-Create a new directory under `internal/modules/`:
+Every module gets its own directory under `internal/modules/`, and the package name matches the directory name. Inside that directory, split the code so each file does one thing. Someone reading the folder should be able to tell which file is responsible for what without opening any of them.
+
+A small module that does a single lookup only needs one file:
 
 ```
-internal/modules/yourservice/
-└── yourservice.go
+internal/modules/proxynova/
+└── proxynova.go
 ```
 
-The package name must match the directory name.
+When a module does several lookups, give each one its own file, named after what it does. The main file holds the client struct, the constructor, `Name()` and the `Search()` method that calls the others. This is how the GitHub module is laid out:
+
+```
+internal/modules/github/
+├── github.go               # client, constructor, Name(), Search()
+├── email-from-commits.go   # emails pulled from public commits
+├── gpg-keys.go             # public GPG keys
+├── ssh-keys.go             # public SSH keys
+├── social-accounts.go      # linked social accounts
+└── mutual-followers.go     # followers who follow back
+```
+
+Tests follow the same idea. Put them in a `_test.go` file next to the code they cover, named after what they test, like `search/probe_test.go` or `breachdirectory/output_test.go`.
 
 ### Implementing the module
 
@@ -241,6 +298,8 @@ type Module interface {
 }
 ```
 
+All modules run at the same time. `run.go` gives each one its own `io.Writer`, buffers what it prints, and writes it to the terminal in order once the module finishes. That means your module must print to the writer it is given, never straight to stdout. Otherwise its output gets mixed in with the other modules.
+
 A minimal module looks like this (see `internal/modules/proxynova/proxynova.go` for a complete example):
 
 ```go
@@ -249,10 +308,12 @@ package yourservice
 import (
     "context"
     "fmt"
+    "io"
     "net/http"
+    "net/url"
     "strings"
-    "time"
 
+    "github.com/ibnaleem/gosearch/internal/config"
     "github.com/ibnaleem/gosearch/internal/file"
     "github.com/ibnaleem/gosearch/internal/modules"
     "github.com/ibnaleem/gosearch/internal/theme"
@@ -260,17 +321,20 @@ import (
 
 type yourServiceClient struct {
     fileWriter *file.FileWriter
+    out        io.Writer
     httpClient *http.Client
 }
 
 type yourServiceResponse struct {
-    // fields of the service's JSON response
+    Count   int      `json:"count"`
+    Results []string `json:"results"`
 }
 
-func NewYourServiceClient(fileWriter *file.FileWriter) modules.Module {
+func NewYourServiceClient(out io.Writer, fileWriter *file.FileWriter) modules.Module {
     return &yourServiceClient{
         fileWriter: fileWriter,
-        httpClient: &http.Client{Timeout: 30 * time.Second},
+        out:        out,
+        httpClient: config.NewHTTPClient(),
     }
 }
 
@@ -279,95 +343,126 @@ func (ysc *yourServiceClient) Name() string {
 }
 
 func (ysc *yourServiceClient) Search(ctx context.Context, query string) (*modules.Result, error) {
-    theme.Cyan("[*] Searching ", query, " on YourService...").Println()
+    theme.Cyan("[*] Searching ", query, " on YourService...").Fprintln(ysc.out)
 
-    // your logic here; return the error on failure:
-    //     return nil, err
+    endpoint := fmt.Sprintf("https://api.yourservice.com/users?q=%s", url.QueryEscape(query))
 
-    // on not found:
-    //     theme.Red("[-] Nothing found on YourService for ", query, ".").Println()
-    //     return nil, nil
+    response, err := modules.FetchJSON[yourServiceResponse](ctx, ysc.httpClient, endpoint, nil)
+    if err != nil {
+        return nil, fmt.Errorf("%s(Search): %w", ysc.Name(), err)
+    }
+
+    // FetchJSON doesn't treat 404 as an error, so check the decoded fields
+    if response.Count == 0 {
+        theme.Red("[-] Nothing found on YourService for ", query, ".").Fprintln(ysc.out)
+        return nil, nil
+    }
 
     var buffer strings.Builder
 
-    theme.Greenf("[+] Found something: %s", result).Println()
-    fmt.Fprintf(&buffer, "[+] Found something: %s\n", result)
+    theme.Greenf("[+] Found %d result(s) for %s:", response.Count, query).Fprintln(ysc.out)
+    fmt.Fprintf(&buffer, "[+] Found %d result(s) for %s:\n", response.Count, query)
+
+    for _, entry := range response.Results {
+        theme.Greenf("    %s", entry).Fprintln(ysc.out)
+        fmt.Fprintf(&buffer, "    %s\n", entry)
+    }
 
     if err := ysc.fileWriter.Write(query, buffer.String()); err != nil {
-        theme.Redf("[!] Could not write output file: %v", err).Println()
+        theme.Redf("[!] Could not write output file: %v", err).Fprintln(ysc.out)
     }
 
     return &modules.Result{
         Module:  ysc.Name(),
-        Summary: "1 result found",
+        Summary: fmt.Sprintf("%d result(s) found", response.Count),
     }, nil
 }
 ```
 
 Rules:
-- Declare types (client struct, response structs) at the top of the file, before the constructor and methods.
-- Receiver names are a short abbreviation of the type, e.g. `pnc` for `proxyNovaClient`, `ghc` for `gitHubClient`.
-- Pass `ctx` to every request with `http.NewRequestWithContext`, and use `modules.CheckStatus` to reject unexpected HTTP statuses.
+- Take `out io.Writer` as the constructor's first argument and print everything through it with `Fprintln(out)`.
+- Build the HTTP client with `config.NewHTTPClient()` so every module gets the same timeouts, TLS settings and proxy support.
+- For JSON APIs, use `modules.FetchJSON`. It sets the user agent, passes `ctx`, and turns `429`, `403` and any other `4xx`/`5xx` code except `404` into an error. A `404` body is still decoded, so check the decoded fields to decide whether anything was found. If you build requests yourself, use `http.NewRequestWithContext` so the request stops when the run is cancelled.
+- Wrap errors with the module name and the function they came from, like `fmt.Errorf("%s(buildRequest): %w", pnc.Name(), err)`. The runner prints them as-is.
 - Escape user input before putting it in a URL: `url.PathEscape` for path segments, `url.QueryEscape` for query values.
 - Return `nil, nil` when nothing is found, `nil, err` on failure, and a `*modules.Result` with a short `Summary` on success. The summary appears in the results table at the end of the run.
-- Use `theme.Cyan` for status messages, `theme.Greenf` for found results, `theme.Red` for not-found.
-- Collect findings in a `strings.Builder` and write them once with `fileWriter.Write(query, ...)` so they appear in the saved output. A failed write is a warning, not an error.
+- Use `theme.Cyan` for status messages, `theme.Greenf` for found results, `theme.Red` for not-found and `theme.Yellow` for skips and warnings.
+- Collect findings in a `strings.Builder` and write them once with `fileWriter.Write(query, ...)` so they end up in the saved output. A failed write is a warning, not an error.
+- Declare types (client struct, response structs) at the top of the file, before the constructor and methods.
+- Receiver names are a short abbreviation of the type, e.g. `pnc` for `proxyNovaClient`, `ghc` for `gitHubClient`.
 
 ### Environment variables
 
-If your module requires an API key or token, read it from the environment. Do not hardcode credentials or require them as CLI flags:
+If your module needs an API key or token, read it from the environment. `GoSearch` loads a `.env` file from the working directory at startup, so users can keep keys there. Don't hardcode credentials:
 
 ```go
-import "os"
-
 apiKey := os.Getenv("YOURSERVICE_API_KEY")
 if apiKey == "" {
-    theme.Yellow("[*] YOURSERVICE_API_KEY not set, skipping YourService.").Println()
+    theme.Yellow("[*] YOURSERVICE_API_KEY not set, skipping YourService.").Fprintln(ysc.out)
     return nil, nil
 }
 ```
 
-Document the variable name in your PR description so it can be added to the README.
+`GITHUB_TOKEN` in the GitHub module works this way. The module runs without it, and uses it for higher rate limits when it's set. Do the same if the service has a free tier. Put the variable name in your PR description so it can be added to the README.
 
 ### Wiring into main.go
 
-Import your package and add your client to the `clients` slice in `main.go`. Modules run in order, and each result is added to the summary table:
+Import your package and add a constructor function to the list passed to `runModules` in `main.go`. The runner calls it with the writer your module should print to:
 
 ```go
 import "github.com/ibnaleem/gosearch/internal/modules/yourservice"
 
-// in main(), alongside the other clients:
-clients = append(clients, yourservice.NewYourServiceClient(fileWriter))
+// in main(), inside the runModules list:
+func(w io.Writer) modules.Module { return yourservice.NewYourServiceClient(w, fileWriter) },
 ```
 
-Place the client in a logical position relative to existing modules. Credential sources belong near `proxynova`; social or profile enrichment belongs near the `github` module.
+Modules run at the same time, but their output and their rows in the results table appear in list order. Put yours in a sensible spot: credential sources near `proxynova` and `breachdirectory`, profile enrichment near `github` and `keybase`. `search` stays last because its output is the longest.
 
 ### Testing your module
 
-Build the binary and run it against a known username:
+Run it against a username that exists on the service and one that doesn't:
 
 ```
-$ go build -o gosearch .
-$ ./gosearch -u <known-username>
+$ go run . -u <known-username>
+$ go run . -u <username-that-does-not-exist>
 ```
 
-Verify that:
+Check that:
+- Your module's output appears under its own separator and isn't mixed with other modules
 - Your module appears in the results table with its summary
 - Found results appear in the terminal and in the output file
-- If no API key is set, the module skips gracefully without panicking
+- If no API key is set, the module skips cleanly without an error or panic
 
-### PR checklist
+If your module parses or formats anything, add a `_test.go` file for it next to the code (see [One file per responsibility](#one-file-per-responsibility)). Tests must not depend on the live service; use `httptest` or feed in saved responses.
+
+---
+
+## Before you open a PR
+
+CI runs these on every PR. Run them locally first:
+
+```
+$ gofmt -l .                # must print nothing
+$ go mod tidy -diff         # must print nothing
+$ go vet ./...
+$ go build ./...
+$ go test -race ./...       # includes TestDataJSON
+$ cd tests && go vet ./... && go build ./...
+```
+
+`tests/` is a separate Go module, so the commands at the root skip it. That's why it has its own line.
+
+### Module PR checklist
 
 - [ ] Package name matches the directory name
-- [ ] The client implements `modules.Module` and is added to `clients` in `main.go`
-- [ ] Terminal output uses `theme` exclusively (no bare `fmt.Println` for results)
+- [ ] Each file has one responsibility and is named after it
+- [ ] The client implements `modules.Module` and is added to the `runModules` list in `main.go`
+- [ ] All output goes through the `out` writer using `theme`, with no bare `fmt.Println` and nothing written to `os.Stdout`
 - [ ] Findings are written with `fileWriter.Write`
 - [ ] API keys are read from environment variables, not hardcoded
 - [ ] Tested against a username that exists on the service and one that does not
-- [ ] `go build ./...` passes cleanly
+- [ ] All the commands in [Before you open a PR](#before-you-open-a-pr) pass
 
 ---
 
 Thank you for improving GoSearch.
-
-<table><tr><td align="center"><a href="https://github.com/ibnaleem"><img alt="ibnaleem" src="https://avatars.githubusercontent.com/u/134088573?v=4" width="117" /><br />ibnaleem</a></td><td align="center"><a href="https://github.com/shelepuginivan"><img alt="shelepuginivan" src="https://avatars.githubusercontent.com/u/110753839?v=4" width="117" /><br />shelepuginivan</a></td><td align="center"><a href="https://github.com/arealibusadrealiora"><img alt="arealibusadrealiora" src="https://avatars.githubusercontent.com/u/113445322?v=4" width="117" /><br />arealibusadrealiora</a></td><td align="center"><a href="https://github.com/apps/dependabot"><img alt="dependabot[bot]" src="https://avatars.githubusercontent.com/in/29110?v=4" width="117" /><br />dependabot[bot]</a></td></tr><tr><td align="center"><a href="https://github.com/vickychhetri"><img alt="vickychhetri" src="https://avatars.githubusercontent.com/u/82648574?v=4" width="117" /><br />vickychhetri</a></td><td align="center"><a href="https://github.com/olekukonko"><img alt="olekukonko" src="https://avatars.githubusercontent.com/u/2615393?v=4" width="117" /><br />olekukonko</a></td><td align="center"><a href="https://github.com/CptIdea"><img alt="CptIdea" src="https://avatars.githubusercontent.com/u/59538729?v=4" width="117" /><br />CptIdea</a></td><td align="center"><a href="https://github.com/yoy123"><img alt="yoy123" src="https://avatars.githubusercontent.com/u/32031720?v=4" width="117" /><br />yoy123</a></td></tr><tr><td align="center"><a href="https://github.com/anotherhadi"><img alt="anotherhadi" src="https://avatars.githubusercontent.com/u/112569860?v=4" width="117" /><br />anotherhadi</a></td><td align="center"><a href="https://github.com/paulpogoda"><img alt="paulpogoda" src="https://avatars.githubusercontent.com/u/170966925?v=4" width="117" /><br />paulpogoda</a></td><td align="center"><a href="https://github.com/AtahanPoyraz"><img alt="AtahanPoyraz" src="https://avatars.githubusercontent.com/u/129458900?v=4" width="117" /><br />AtahanPoyraz</a></td></tr></table>

@@ -3,6 +3,7 @@ package search
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -79,5 +80,44 @@ func TestSearchSiteReportsBodyReadTimeoutAsFailedProbe(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "1 site(s) could not be checked") {
 		t.Fatalf("output = %q, want the stalled site counted as unchecked", out.String())
+	}
+}
+
+func TestSearchSiteFollowsRedirectsUnlessDisabled(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/john") {
+			http.Redirect(w, r, "/missing", http.StatusFound)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	noRedirect := config.NewHTTPClient()
+	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
+	for _, tc := range []struct {
+		entry     string
+		wantFound bool
+	}{
+		{`{"name": "default", "base_url": "` + server.URL + `/default/{}", "errorType": "status_code"}`, false},
+		{`{"name": "disabled", "base_url": "` + server.URL + `/disabled/{}", "errorType": "status_code", "follow_redirects": false}`, true},
+		{`{"name": "enabled", "base_url": "` + server.URL + `/enabled/{}", "errorType": "status_code", "follow_redirects": true}`, false},
+	} {
+		var site website
+		if err := json.Unmarshal([]byte(tc.entry), &site); err != nil {
+			t.Fatalf("decode %s: %v", tc.entry, err)
+		}
+
+		var out bytes.Buffer
+		sc := &searchClient{out: &out, httpClient: config.NewHTTPClient(), noRedirectHTTPClient: noRedirect}
+
+		found, _, err := sc.searchSite(context.Background(), "john", []website{site})
+		if err != nil {
+			t.Fatalf("%s: searchSite error: %v", site.Name, err)
+		}
+		if got := len(found) == 1; got != tc.wantFound {
+			t.Fatalf("%s: found = %v, want found=%v", site.Name, found, tc.wantFound)
+		}
 	}
 }
