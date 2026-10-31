@@ -90,7 +90,7 @@ Websites usually send `200 OK` for profiles that exist and `404 Not Found` for o
   "errorType": "status_code"
 }
 ```
-`errorCode` is optional. Without it, any `4xx` means "not found". If the site uses a non-`4xx` code for missing users, put that code in `errorCode`.
+`errorCode` is optional. Without it, any `4xx` means "not found". If the site uses a non-`4xx` code for missing users, put that code in `errorCode`. If that code is a redirect (`3xx`), also set `"follow_redirects": false`, otherwise `GoSearch` follows it and never sees the code.
 
 #### `errorMsg`
 Some websites return the same status code whether the profile exists or not. In that case we have to look at the response body for an error message. It's often inside the `<title>` tag, but it can be anywhere. Pass the URL followed by mode `1`:
@@ -138,7 +138,7 @@ To double-check, run mode `4` against the missing username. It asks for the erro
 ```
 $ ./tests https://yourwebsite.com/username-does-not-exist 4
 ```
-If the page only differs before a redirect, mode `3` saves the body without following redirects.
+If the page only differs before a redirect, mode `3` saves the body without following redirects. Use what you find there with `"follow_redirects": false`, since `GoSearch` follows redirects otherwise.
 
 #### `profilePresence`
 The exact opposite of `errorMsg`. Instead of studying `username_not_found.txt`, look through `username_found.txt` for a word, phrase, HTML tag or other element that only appears there. Set `"errorType": "profilePresence"` and put what you found in `errorMsg`.
@@ -165,7 +165,6 @@ The entry for this website looks like this. `response_url` uses `{}` for the use
 {
   "name": "Packagist",
   "base_url": "https://packagist.org/packages/{}/",
-  "follow_redirects": true,
   "errorType": "response_url",
   "response_url": "https://packagist.org/search/?q={}&reason=vendor_not_found"
 }
