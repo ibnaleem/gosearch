@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -52,6 +54,48 @@ func TestSearchSiteGivesUpOnHangingSite(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "Searching 2 site(s)") {
 		t.Fatalf("output = %q, want the progress line in the given writer", out.String())
+	}
+}
+
+func TestSearchSiteBoundsConcurrentProbes(t *testing.T) {
+	var (
+		mu             sync.Mutex
+		inFlight, peak int
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		inFlight++
+		peak = max(peak, inFlight)
+		mu.Unlock()
+
+		time.Sleep(20 * time.Millisecond)
+
+		mu.Lock()
+		inFlight--
+		mu.Unlock()
+	}))
+	defer server.Close()
+
+	defer func(old int) { maxProbes = old }(maxProbes)
+	maxProbes = 4
+
+	var sites []website
+	for i := range 5 * maxProbes {
+		sites = append(sites, website{Name: fmt.Sprint(i), BaseURL: fmt.Sprintf("%s/%d/{}", server.URL, i), ErrorType: "status_code"})
+	}
+
+	var out bytes.Buffer
+	sc := &searchClient{out: &out, httpClient: config.NewHTTPClient(), noRedirectHTTPClient: config.NewHTTPClient()}
+
+	found, _, err := sc.searchSite(context.Background(), "john", sites)
+	if err != nil {
+		t.Fatalf("searchSite error: %v", err)
+	}
+	if len(found) != len(sites) {
+		t.Fatalf("found %d sites, want all %d probed", len(found), len(sites))
+	}
+	if peak > maxProbes {
+		t.Fatalf("peak concurrent probes = %d, want at most %d", peak, maxProbes)
 	}
 }
 
