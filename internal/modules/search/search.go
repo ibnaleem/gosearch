@@ -56,6 +56,9 @@ type resource struct {
 // in 8s, while a dead host otherwise holds the whole search for the 30s client timeout
 var probeTimeout = 15 * time.Second
 
+// maxProbes caps the requests in flight at once across a site or domain sweep
+var maxProbes = 32
+
 // a query used as a subdomain must be a single DNS label (RFC 1123)
 var dnsLabel = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
 
@@ -149,10 +152,19 @@ func (sc *searchClient) searchDomain(ctx context.Context, query string) ([]strin
 		wg sync.WaitGroup
 
 		foundDomains []string
+
+		slots = make(chan struct{}, maxProbes)
 	)
 
 	for _, domain := range domains {
 		wg.Go(func() {
+			select {
+			case slots <- struct{}{}:
+				defer func() { <-slots }()
+			case <-ctx.Done():
+				return
+			}
+
 			// most sites redirect http to https, so try https first and fall
 			// back to http; a domain that doesn't respond is just not found
 			var response *http.Response
@@ -266,6 +278,8 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 		// sites that were rate-limited, failed server-side or timed out, so
 		// they couldn't be checked; counted so they don't pass as "not found"
 		failedProbes int
+
+		slots = make(chan struct{}, maxProbes)
 	)
 
 	for _, site := range sites {
@@ -300,6 +314,13 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 					theme.Redf("search: build probe URL for %s: %v", site.Name, err).Fprintln(sc.out)
 					return
 				}
+			}
+
+			select {
+			case slots <- struct{}{}:
+				defer func() { <-slots }()
+			case <-ctx.Done():
+				return
 			}
 
 			probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
