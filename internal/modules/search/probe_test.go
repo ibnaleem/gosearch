@@ -164,6 +164,9 @@ func TestSearchSiteFollowsRedirectsUnlessDisabled(t *testing.T) {
 		if got := len(found) == 1; got != tc.wantFound {
 			t.Fatalf("%s: found = %v, want found=%v", site.Name, found, tc.wantFound)
 		}
+		if strings.Contains(out.String(), "could not be checked") {
+			t.Fatalf("%s: output = %q, want no unchecked warning", site.Name, out.String())
+		}
 	}
 }
 
