@@ -106,6 +106,20 @@ func UnmarshalJSON() (Data, error) {
 	return data, nil
 }
 
+// decodedBody wraps res.Body in the reader matching its Content-Encoding.
+func decodedBody(res *http.Response) (io.Reader, error) {
+	switch res.Header.Get("Content-Encoding") {
+	case "gzip":
+		return gzip.NewReader(res.Body)
+	case "deflate":
+		return zlib.NewReader(res.Body)
+	case "br":
+		return brotli.NewReader(res.Body), nil
+	default:
+		return res.Body, nil
+	}
+}
+
 func Mode0(url string) {
 	fmt.Println(Yellow+"[*] Testing URL:", url+Reset)
 	fmt.Println(Yellow + "[*] Mode: 0 (Status Code)" + Reset)
@@ -200,29 +214,13 @@ func Mode1(url string) {
 		log.Fatal(err)
 	}
 
-	var reader io.ReadCloser
-
-	switch res.Header.Get("Content-Encoding") {
-	case "gzip":
-		gzReader, err := gzip.NewReader(res.Body)
-		if err != nil {
-			fmt.Printf("Error creating gzip reader: %v\n", err)
-			return
-		}
-		reader = gzReader
-	case "deflate":
-		zlibReader, err := zlib.NewReader(res.Body)
-		if err != nil {
-			fmt.Printf("Error creating deflate reader: %v\n", err)
-			return
-		}
-		reader = zlibReader
-	case "br":
-		reader = io.NopCloser(brotli.NewReader(res.Body))
-	default:
-		reader = res.Body
-	}
 	defer res.Body.Close()
+
+	reader, err := decodedBody(res)
+	if err != nil {
+		fmt.Printf("Error decoding response body: %v\n", err)
+		return
+	}
 
 	if res.StatusCode >= 400 {
 		return
@@ -335,29 +333,13 @@ func Mode3(url string) {
 		log.Fatal(err)
 	}
 
-	var reader io.ReadCloser
-
-	switch res.Header.Get("Content-Encoding") {
-	case "gzip":
-		gzReader, err := gzip.NewReader(res.Body)
-		if err != nil {
-			fmt.Printf("Error creating gzip reader: %v\n", err)
-			return
-		}
-		reader = gzReader
-	case "deflate":
-		zlibReader, err := zlib.NewReader(res.Body)
-		if err != nil {
-			fmt.Printf("Error creating deflate reader: %v\n", err)
-			return
-		}
-		reader = zlibReader
-	case "br":
-		reader = io.NopCloser(brotli.NewReader(res.Body))
-	default:
-		reader = res.Body
-	}
 	defer res.Body.Close()
+
+	reader, err := decodedBody(res)
+	if err != nil {
+		fmt.Printf("Error decoding response body: %v\n", err)
+		return
+	}
 
 	if res.StatusCode >= 400 {
 		return
@@ -420,29 +402,13 @@ func Mode4(url string, errorMsg string) {
 		log.Fatal(err)
 	}
 
-	var reader io.ReadCloser
-
-	switch res.Header.Get("Content-Encoding") {
-	case "gzip":
-		gzReader, err := gzip.NewReader(res.Body)
-		if err != nil {
-			fmt.Printf("Error creating gzip reader: %v\n", err)
-			return
-		}
-		reader = gzReader
-	case "deflate":
-		zlibReader, err := zlib.NewReader(res.Body)
-		if err != nil {
-			fmt.Printf("Error creating deflate reader: %v\n", err)
-			return
-		}
-		reader = zlibReader
-	case "br":
-		reader = io.NopCloser(brotli.NewReader(res.Body))
-	default:
-		reader = res.Body
-	}
 	defer res.Body.Close()
+
+	reader, err := decodedBody(res)
+	if err != nil {
+		fmt.Printf("Error decoding response body: %v\n", err)
+		return
+	}
 
 	if res.StatusCode >= 400 {
 		return
