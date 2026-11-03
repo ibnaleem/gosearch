@@ -506,7 +506,7 @@ func (ghc *gitHubClient) buildMutualFollowersRequest(ctx context.Context, query 
 
 	for _, follower := range param {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return mutualFollowers, err
 		}
 
 		endpoint := fmt.Sprintf("https://api.github.com/users/%s/following/%s", url.PathEscape(query), url.PathEscape(follower.Login))
