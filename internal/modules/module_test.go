@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -55,5 +56,27 @@ func TestFetchJSONServerErrorFails(t *testing.T) {
 	}
 	if got != nil {
 		t.Fatalf("got %+v, want nil result on 500", got)
+	}
+}
+
+func TestReadBodyEnforcesLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		size    int
+		wantErr bool
+	}{
+		{"under limit", 9, false},
+		{"at limit", 10, false},
+		{"one over limit", 11, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body, err := ReadBody(strings.NewReader(strings.Repeat("x", tc.size)), 10)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, tc.wantErr)
+			}
+			if !tc.wantErr && len(body) != tc.size {
+				t.Fatalf("read %d bytes, want %d", len(body), tc.size)
+			}
+		})
 	}
 }

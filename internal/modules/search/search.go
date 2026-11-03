@@ -56,6 +56,9 @@ type resource struct {
 // in 8s, while a dead host otherwise holds the whole search for the 30s client timeout
 var probeTimeout = 15 * time.Second
 
+// maxMarkerBytes caps a page read to look for an errorMsg or profilePresence marker
+var maxMarkerBytes int64 = 5 << 20
+
 // maxProbes caps the requests in flight at once across a site or domain sweep
 var maxProbes = 32
 
@@ -278,8 +281,9 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 		foundSites     []string
 		uncertainSites []string
 
-		// sites that were rate-limited, failed server-side or timed out, so
-		// they couldn't be checked; counted so they don't pass as "not found"
+		// sites that were rate-limited, failed server-side, timed out or sent a
+		// body too large to search for a marker, so they couldn't be checked;
+		// counted so they don't pass as "not found"
 		failedProbes int
 
 		slots = make(chan struct{}, maxProbes)
@@ -385,7 +389,7 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 
 			var body string
 			if site.ErrorType == "errorMsg" || site.ErrorType == "profilePresence" {
-				raw, err := io.ReadAll(response.Body)
+				raw, err := modules.ReadBody(response.Body, maxMarkerBytes)
 				if err != nil {
 					if ctx.Err() == nil {
 						mu.Lock()
@@ -492,7 +496,7 @@ func (sc *searchClient) buildResources(ctx context.Context) (*resource, error) {
 
 	var body []byte
 	if err == nil {
-		body, err = io.ReadAll(response.Body)
+		body, err = modules.ReadBody(response.Body, modules.MaxBodyBytes)
 	} else {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr

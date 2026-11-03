@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 
 	"github.com/ibnaleem/gosearch/internal/config"
+	"github.com/ibnaleem/gosearch/internal/modules"
 )
 
 // HashCracker resolves password hashes to plaintext through weakpass.com. It is
@@ -66,7 +66,7 @@ func (hc *HashCracker) CrackHash(ctx context.Context, hash string) (string, erro
 		return "", fmt.Errorf("weakpass: unexpected status %d", response.StatusCode)
 	}
 
-	body, err := io.ReadAll(response.Body)
+	body, err := modules.ReadBody(response.Body, modules.MaxBodyBytes)
 	if err != nil {
 		return "", fmt.Errorf("weakpass: read response: %w", err)
 	}
