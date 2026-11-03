@@ -525,7 +525,7 @@ func (ghc *gitHubClient) buildMutualFollowersRequest(ctx context.Context, query 
 
 		response, err := ghc.httpClient.Do(request)
 		if err != nil {
-			return nil, fmt.Errorf("%s(buildMutualFollowersRequest): send request: %w", ghc.Name(), err)
+			return mutualFollowers, fmt.Errorf("%s(buildMutualFollowersRequest): send request: %w", ghc.Name(), err)
 		}
 
 		response.Body.Close()
