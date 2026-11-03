@@ -41,9 +41,9 @@ jobs:
       run: go build ./...
 
     # tests/ is its own module, so ./... above skips it.
-    - name: Vet and build tests module
+    - name: Tidy, vet and build tests module
       working-directory: tests
-      run: go vet ./... && go build ./...
+      run: go mod tidy -diff && go vet ./... && go build ./...
 
     # Includes TestDataJSON: schema, duplicates, URLs and errorType fields of data.json.
     - name: Test
