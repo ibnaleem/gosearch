@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -163,5 +164,41 @@ func TestSearchSiteFollowsRedirectsUnlessDisabled(t *testing.T) {
 		if got := len(found) == 1; got != tc.wantFound {
 			t.Fatalf("%s: found = %v, want found=%v", site.Name, found, tc.wantFound)
 		}
+	}
+}
+
+func TestSearchSiteCountsUnexpectedRedirectAsUnchecked(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/challenge/john"):
+			http.Redirect(w, r, "/bot-check", http.StatusTemporaryRedirect)
+		case strings.HasSuffix(r.URL.Path, "/missing/john"):
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusAccepted)
+		}
+	}))
+	defer server.Close()
+
+	noRedirect := config.NewHTTPClient()
+	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
+	no := false
+	site := func(name string) website {
+		return website{Name: name, BaseURL: server.URL + "/" + name + "/{}", ErrorType: "status_code", ErrorCode: 200, FollowRedirects: &no}
+	}
+
+	var out bytes.Buffer
+	sc := &searchClient{out: &out, httpClient: config.NewHTTPClient(), noRedirectHTTPClient: noRedirect}
+
+	found, _, err := sc.searchSite(context.Background(), "john", []website{site("challenge"), site("missing"), site("present")})
+	if err != nil {
+		t.Fatalf("searchSite error: %v", err)
+	}
+	if want := []string{server.URL + "/present/john"}; !slices.Equal(found, want) {
+		t.Fatalf("found = %v, want %v", found, want)
+	}
+	if !strings.Contains(out.String(), "1 site(s) could not be checked (rate limited, redirected") {
+		t.Fatalf("output = %q, want the redirected site counted as unchecked", out.String())
 	}
 }
