@@ -3,6 +3,7 @@ package file
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -45,5 +46,37 @@ func TestConcurrentWritesDoNotInterleave(t *testing.T) {
 		if len(line) != 256*1024 || strings.Trim(line, line[:1]) != "" {
 			t.Fatalf("line %d is a mix of chunks", i)
 		}
+	}
+}
+
+func TestWriteCreatesPrivateDirAndFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permission bits are not enforced on Windows")
+	}
+
+	dir := filepath.Join(t.TempDir(), "results")
+	fw := NewFileWriter(dir)
+	if err := fw.Write("john", "x"); err != nil {
+		t.Fatal(err)
+	}
+
+	dirInfo, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := dirInfo.Mode().Perm(); got != 0700 {
+		t.Errorf("dir mode = %o, want 700", got)
+	}
+
+	files, _ := filepath.Glob(filepath.Join(dir, "john_*.txt"))
+	if len(files) != 1 {
+		t.Fatalf("want 1 output file, got %v", files)
+	}
+	fileInfo, err := os.Stat(files[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fileInfo.Mode().Perm(); got != 0600 {
+		t.Errorf("file mode = %o, want 600", got)
 	}
 }
