@@ -3,6 +3,7 @@ package weakpass
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,8 +34,9 @@ func NewHashCracker() *HashCracker {
 }
 
 // CrackHash looks up a SHA-1 hash on weakpass.com and returns its plaintext.
-// It returns "" with no error when the hash is empty, unknown to Weakpass
-// (404) or the lookup is rate-limited (403); any other failure is an error.
+// It returns "" with no error when the hash is empty or unknown to Weakpass
+// (404). A rate-limited or denied lookup (403) and any other failure are
+// errors, so callers can tell "not cracked" from "not checked".
 func (hc *HashCracker) CrackHash(ctx context.Context, hash string) (string, error) {
 	if hash == "" {
 		return "", nil
@@ -58,9 +60,11 @@ func (hc *HashCracker) CrackHash(ctx context.Context, hash string) (string, erro
 	defer response.Body.Close()
 
 	switch {
-	case response.StatusCode == http.StatusForbidden || response.StatusCode == http.StatusNotFound:
-		// 403 (rate limited) and 404 (hash not in Weakpass) just mean "not cracked".
+	case response.StatusCode == http.StatusNotFound:
 		return "", nil
+
+	case response.StatusCode == http.StatusForbidden:
+		return "", errors.New("weakpass: rate limited or access denied (HTTP 403)")
 
 	case response.StatusCode < 200 || response.StatusCode >= 300:
 		return "", fmt.Errorf("weakpass: unexpected status %d", response.StatusCode)
