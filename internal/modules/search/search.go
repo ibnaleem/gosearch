@@ -476,7 +476,7 @@ func (sc *searchClient) buildResources(ctx context.Context) (*resource, error) {
 
 	var body []byte
 	if err == nil {
-		body, err = io.ReadAll(response.Body)
+		body, err = modules.ReadBody(response.Body, modules.MaxBodyBytes)
 	} else {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
