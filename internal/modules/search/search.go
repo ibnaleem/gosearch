@@ -63,7 +63,7 @@ var maxProbes = 32
 var dnsLabel = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
 
 func NewSearchClient(out io.Writer, fileWriter *file.FileWriter, noFalsePositive bool) modules.Module {
-	httpClient := config.NewHTTPClient()
+	httpClient := config.NewPublicHTTPClient()
 
 	noRedirectHTTPClient := *httpClient
 	noRedirectHTTPClient.CheckRedirect = func(*http.Request, []*http.Request) error {
