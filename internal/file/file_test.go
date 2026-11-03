@@ -80,3 +80,29 @@ func TestWriteCreatesPrivateDirAndFile(t *testing.T) {
 		t.Errorf("file mode = %o, want 600", got)
 	}
 }
+
+func TestWriteRefusesPreplantedSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(t.TempDir(), "target.txt")
+	if err := os.WriteFile(target, []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	fw := NewFileWriter(dir)
+	name := "john_" + fw.createdAt.Format("2006-01-02_15-04-05") + ".txt"
+	if err := os.Symlink(target, filepath.Join(dir, name)); err != nil {
+		t.Skipf("cannot create symlink: %v", err)
+	}
+
+	if err := fw.Write("john", "secret"); err == nil {
+		t.Error("Write succeeded through a pre-planted symlink")
+	}
+
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "original" {
+		t.Errorf("symlink target modified: %q", got)
+	}
+}
