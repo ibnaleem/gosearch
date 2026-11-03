@@ -3,12 +3,17 @@ package modules
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 
 	"github.com/ibnaleem/gosearch/internal/config"
 )
+
+// ErrNotFound is returned by FetchJSON on HTTP 404. Callers decide whether a
+// 404 means a missing record or a real failure for their endpoint.
+var ErrNotFound = errors.New("not found (HTTP 404)")
 
 type Module interface {
 	Name() string
@@ -44,10 +49,13 @@ func FetchJSON[T any](ctx context.Context, httpClient *http.Client, endpoint str
 	defer response.Body.Close()
 
 	switch status := response.StatusCode; {
+	case status == http.StatusNotFound:
+		return nil, ErrNotFound
+
 	case status == http.StatusTooManyRequests || status == http.StatusForbidden:
 		return nil, fmt.Errorf("rate limit exceeded or access denied (HTTP %d)", status)
 
-	case status >= 400 && status != http.StatusNotFound:
+	case status >= 400:
 		return nil, fmt.Errorf("unexpected status %d", status)
 	}
 
