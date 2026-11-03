@@ -397,6 +397,15 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 			var found bool
 			switch site.ErrorType {
 			case "status_code":
+				// an unfollowed redirect other than the expected one is often a bot
+				// challenge, so it can't confirm a profile exists
+				if response.StatusCode >= http.StatusMultipleChoices && response.StatusCode != site.ErrorCode {
+					mu.Lock()
+					failedProbes++
+					mu.Unlock()
+					return
+				}
+
 				found = response.StatusCode != site.ErrorCode
 
 			case "errorMsg":
@@ -429,7 +438,7 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 	slices.Sort(uncertainSites)
 
 	if failedProbes > 0 {
-		theme.Yellowf("[!] %d site(s) could not be checked (rate limited, server error or timeout)", failedProbes).Fprintln(sc.out)
+		theme.Yellowf("[!] %d site(s) could not be checked (rate limited, redirected, server error or timeout)", failedProbes).Fprintln(sc.out)
 	}
 
 	if len(foundSites) == 0 && len(uncertainSites) == 0 {
