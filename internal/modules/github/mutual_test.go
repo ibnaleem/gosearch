@@ -34,3 +34,25 @@ func TestMutualFollowersKeepsMatchesFoundBeforeCancel(t *testing.T) {
 		t.Fatalf("mutual followers = %v, want [alice]", got)
 	}
 }
+
+func TestMutualFollowersKeepsMatchesFoundBeforeFailedRequest(t *testing.T) {
+	calls := 0
+	ghc := &gitHubClient{httpClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		if calls > 1 {
+			return nil, context.Canceled
+		}
+		return &http.Response{StatusCode: http.StatusNoContent, Body: io.NopCloser(strings.NewReader("")), Request: r}, nil
+	})}}
+
+	followers := []gitHubFollowersResponse{{Login: "alice"}, {Login: "bob"}}
+
+	got, err := ghc.buildMutualFollowersRequest(context.Background(), "someone", followers)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if !slices.Equal(got, []string{"alice"}) {
+		t.Fatalf("mutual followers = %v, want [alice]", got)
+	}
+}
