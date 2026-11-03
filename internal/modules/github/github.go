@@ -16,6 +16,10 @@ import (
 	"github.com/ibnaleem/gosearch/internal/theme"
 )
 
+// maxDrainBytes bounds how much of an unread response body is discarded to keep
+// its connection alive; anything longer just costs the connection
+const maxDrainBytes = 64 << 10
+
 type gitHubClient struct {
 	fileWriter *file.FileWriter
 	out        io.Writer
@@ -528,6 +532,8 @@ func (ghc *gitHubClient) buildMutualFollowersRequest(ctx context.Context, query 
 			return mutualFollowers, fmt.Errorf("%s(buildMutualFollowersRequest): send request: %w", ghc.Name(), err)
 		}
 
+		// read the small 404 body to EOF so the next check reuses this connection
+		io.Copy(io.Discard, io.LimitReader(response.Body, maxDrainBytes))
 		response.Body.Close()
 
 		switch response.StatusCode {
