@@ -425,6 +425,10 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 
 	wg.Wait()
 
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+
 	slices.Sort(foundSites)
 	slices.Sort(uncertainSites)
 
