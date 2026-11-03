@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -289,6 +290,9 @@ func (ghc *gitHubClient) buildUserRequest(ctx context.Context, query string) (*g
 	endpoint := fmt.Sprintf("https://api.github.com/users/%s", url.PathEscape(query))
 
 	response, err := modules.FetchJSON[gitHubUserResponse](ctx, ghc.httpClient, endpoint, ghc.headers())
+	if errors.Is(err, modules.ErrNotFound) {
+		return &gitHubUserResponse{}, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%s(buildUserRequest): %w", ghc.Name(), err)
 	}

@@ -2,7 +2,6 @@ package gravatar
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -161,21 +160,13 @@ func (gc *gravatarClient) buildRequest(ctx context.Context, query string) (*grav
 	// would fail to parse as a URL at all.
 	endpoint := fmt.Sprintf("https://gravatar.com/%s.json", url.PathEscape(query))
 
-	// A missing user comes back as the JSON string "User not found" rather than
-	// an object, so the body is fetched raw and checked before decoding.
-	body, err := modules.FetchJSON[json.RawMessage](ctx, gc.httpClient, endpoint, nil)
+	response, err := modules.FetchJSON[gravatarResponse](ctx, gc.httpClient, endpoint, nil)
+	if errors.Is(err, modules.ErrNotFound) {
+		return nil, errGravatarUserNotFound
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%s(buildRequest): %w", gc.Name(), err)
 	}
 
-	if strings.TrimSpace(string(*body)) == `"User not found"` {
-		return nil, errGravatarUserNotFound
-	}
-
-	var gravatarResponse gravatarResponse
-	if err := json.Unmarshal(*body, &gravatarResponse); err != nil {
-		return nil, fmt.Errorf("%s(buildRequest): decode response: %w", gc.Name(), err)
-	}
-
-	return &gravatarResponse, nil
+	return response, nil
 }
