@@ -165,11 +165,14 @@ func (sc *searchClient) searchDomain(ctx context.Context, query string) ([]strin
 				return
 			}
 
+			domainCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+			defer cancel()
+
 			// most sites redirect http to https, so try https first and fall
 			// back to http; a domain that doesn't respond is just not found
 			var response *http.Response
 			for _, scheme := range []string{"https", "http"} {
-				request, err := http.NewRequestWithContext(ctx, http.MethodGet, scheme+"://"+domain, nil)
+				request, err := http.NewRequestWithContext(domainCtx, http.MethodGet, scheme+"://"+domain, nil)
 				if err != nil {
 					return
 				}
