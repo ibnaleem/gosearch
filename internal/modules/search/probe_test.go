@@ -134,7 +134,7 @@ func TestSearchSiteFollowsRedirectsUnlessDisabled(t *testing.T) {
 			http.Redirect(w, r, "/missing", http.StatusFound)
 			return
 		}
-		http.NotFound(w, r)
+		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
@@ -145,9 +145,9 @@ func TestSearchSiteFollowsRedirectsUnlessDisabled(t *testing.T) {
 		entry     string
 		wantFound bool
 	}{
-		{`{"name": "default", "base_url": "` + server.URL + `/default/{}", "errorType": "status_code"}`, false},
-		{`{"name": "disabled", "base_url": "` + server.URL + `/disabled/{}", "errorType": "status_code", "follow_redirects": false}`, true},
-		{`{"name": "enabled", "base_url": "` + server.URL + `/enabled/{}", "errorType": "status_code", "follow_redirects": true}`, false},
+		{`{"name": "default", "base_url": "` + server.URL + `/default/{}", "errorType": "status_code", "errorCode": 302}`, true},
+		{`{"name": "disabled", "base_url": "` + server.URL + `/disabled/{}", "errorType": "status_code", "errorCode": 302, "follow_redirects": false}`, false},
+		{`{"name": "enabled", "base_url": "` + server.URL + `/enabled/{}", "errorType": "status_code", "errorCode": 302, "follow_redirects": true}`, true},
 	} {
 		var site website
 		if err := json.Unmarshal([]byte(tc.entry), &site); err != nil {
