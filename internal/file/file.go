@@ -7,12 +7,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // path separators plus characters Windows rejects in file names
 var fileNameReplacer = strings.NewReplacer(
 	"/", "_", "\\", "_", ":", "_", "*", "_", "?", "_", "\"", "_", "<", "_", ">", "_", "|", "_",
 )
+
+const maxUsernameFilenameBytes = 100
 
 type FileWriter struct {
 	outputPath string
@@ -43,7 +46,7 @@ func (fw *FileWriter) Write(username, content string) error {
 	}
 
 	// a username like "../x" must not escape the output directory
-	fileName := fmt.Sprintf("%s_%s.txt", fileNameReplacer.Replace(username), fw.createdAt.Format("2006-01-02_15-04-05"))
+	fileName := fmt.Sprintf("%s_%s.txt", safeUsername(username), fw.createdAt.Format("2006-01-02_15-04-05"))
 	filePath := filepath.Join(fw.outputPath, fileName)
 
 	file, err := fw.open(filePath)
@@ -57,6 +60,16 @@ func (fw *FileWriter) Write(username, content string) error {
 	}
 
 	return nil
+}
+
+func safeUsername(username string) string {
+	sanitized := fileNameReplacer.Replace(username)
+	for len(sanitized) > maxUsernameFilenameBytes {
+		_, size := utf8.DecodeLastRuneInString(sanitized)
+		sanitized = sanitized[:len(sanitized)-size]
+	}
+
+	return sanitized
 }
 
 // open creates the file exclusively on first use, so a pre-planted file or

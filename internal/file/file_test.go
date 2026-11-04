@@ -106,3 +106,27 @@ func TestWriteRefusesPreplantedSymlink(t *testing.T) {
 		t.Errorf("symlink target modified: %q", got)
 	}
 }
+
+func TestWriteBoundsLongUsernameFilename(t *testing.T) {
+	dir := t.TempDir()
+	fw := NewFileWriter(dir)
+	username := strings.Repeat("ü", 200)
+
+	if err := fw.Write(username, "result"); err != nil {
+		t.Fatal(err)
+	}
+
+	files, err := filepath.Glob(filepath.Join(dir, "*.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("want one output file, got %v", files)
+	}
+
+	base := filepath.Base(files[0])
+	prefix := strings.TrimSuffix(base, "_"+fw.createdAt.Format("2006-01-02_15-04-05")+".txt")
+	if len(prefix) > maxUsernameFilenameBytes {
+		t.Fatalf("username portion is %d bytes, want at most %d", len(prefix), maxUsernameFilenameBytes)
+	}
+}
