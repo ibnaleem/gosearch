@@ -82,7 +82,7 @@ func TestRunModulesRecoversModulePanics(t *testing.T) {
 	if len(results) != 1 || results[0].Module != "healthy" {
 		t.Fatalf("results = %+v, want only healthy", results)
 	}
-	if !strings.Contains(out.String(), "module panicked: boom") {
+	if !strings.Contains(out.String(), "broken(Search): panic: boom") {
 		t.Fatalf("output %q does not report the panic", out.String())
 	}
 }
