@@ -42,6 +42,11 @@ func runModules(ctx context.Context, w io.Writer, query string, newModules []fun
 		runs[i] = run
 		go func() {
 			defer close(run.done)
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					run.err = fmt.Errorf("module panicked: %v", recovered)
+				}
+			}()
 			run.result, run.err = newModule(&run.out).Search(ctx, query)
 		}()
 	}
