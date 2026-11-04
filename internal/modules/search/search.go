@@ -314,6 +314,16 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 				return
 			}
 
+			if site.ErrorType == "response_url" && strings.TrimSpace(site.ResponseURL) == "" {
+				if !sc.noFalsePositive {
+					mu.Lock()
+					uncertainSites = append(uncertainSites, url)
+					mu.Unlock()
+				}
+
+				return
+			}
+
 			probeURL := url
 			if site.URLProbe != "" {
 				probeURL, err = sc.buildSiteURL(site.URLProbe, query)
