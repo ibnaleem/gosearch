@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestConcurrentWritesDoNotInterleave(t *testing.T) {
@@ -110,7 +111,8 @@ func TestWriteRefusesPreplantedSymlink(t *testing.T) {
 func TestWriteBoundsLongUsernameFilename(t *testing.T) {
 	dir := t.TempDir()
 	fw := NewFileWriter(dir)
-	username := strings.Repeat("ü", 200)
+	// the leading byte puts the 100-byte cut inside a two-byte rune
+	username := "a" + strings.Repeat("ü", 200)
 
 	if err := fw.Write(username, "result"); err != nil {
 		t.Fatal(err)
@@ -128,5 +130,8 @@ func TestWriteBoundsLongUsernameFilename(t *testing.T) {
 	prefix := strings.TrimSuffix(base, "_"+fw.createdAt.Format("2006-01-02_15-04-05")+".txt")
 	if len(prefix) > maxUsernameFilenameBytes {
 		t.Fatalf("username portion is %d bytes, want at most %d", len(prefix), maxUsernameFilenameBytes)
+	}
+	if !utf8.ValidString(prefix) {
+		t.Fatalf("username portion %q splits a UTF-8 rune", prefix)
 	}
 }
