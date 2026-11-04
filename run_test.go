@@ -60,7 +60,6 @@ func TestRunModulesRunsConcurrentlyAndKeepsOrder(t *testing.T) {
 	if elapsed > 700*time.Millisecond {
 		t.Fatalf("took %v; modules must run at the same time, not one after another", elapsed)
 	}
-
 	if len(results) != 2 || results[0].Module != "slow" || results[1].Module != "fast" {
 		t.Fatalf("results = %+v, want slow then fast", results)
 	}
