@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/ibnaleem/gosearch/internal/config"
@@ -200,6 +201,10 @@ func (sc *searchClient) searchDomain(ctx context.Context, query string) ([]strin
 				if errors.As(err, &dnsErr) {
 					return
 				}
+
+				if !shouldFallbackToHTTP(err) {
+					return
+				}
 			}
 
 			if response == nil {
@@ -237,6 +242,16 @@ func (sc *searchClient) searchDomain(ctx context.Context, query string) ([]strin
 	}
 
 	return foundDomains, nil
+}
+
+func shouldFallbackToHTTP(err error) bool {
+	var opErr *net.OpError
+	if !errors.As(err, &opErr) {
+		return false
+	}
+
+	var errno syscall.Errno
+	return errors.As(opErr.Err, &errno) && errno == syscall.ECONNREFUSED
 }
 
 func (sc *searchClient) buildDomains(field string) ([]string, error) {

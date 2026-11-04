@@ -3,8 +3,10 @@ package search
 import (
 	"bytes"
 	"context"
+	"net"
 	"net/http"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -63,11 +65,17 @@ func TestSearchDomainGivesUpOnHangingDomain(t *testing.T) {
 	}
 	for host, deadlines := range transport.deadlines {
 		schemes := transport.schemes[host]
-		if len(deadlines) != 2 || schemes[0] != "https" || schemes[1] != "http" {
-			t.Fatalf("%s: schemes = %v, want [https http]", host, schemes)
+		if len(deadlines) != 1 || schemes[0] != "https" {
+			t.Fatalf("%s: schemes = %v, want [https]", host, schemes)
 		}
-		if !deadlines[0].Equal(deadlines[1]) {
-			t.Fatalf("%s: https and http attempts have different deadlines (%v vs %v); they must share one probeTimeout", host, deadlines[0], deadlines[1])
-		}
+	}
+}
+
+func TestShouldFallbackToHTTPOnlyOnConnectionRefused(t *testing.T) {
+	if !shouldFallbackToHTTP(&net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED}) {
+		t.Fatal("connection refused should fall back to HTTP")
+	}
+	if shouldFallbackToHTTP(context.DeadlineExceeded) {
+		t.Fatal("deadline exceeded should not fall back to HTTP")
 	}
 }
