@@ -35,10 +35,6 @@ var (
 )
 
 func init() {
-	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
-		fmt.Fprintf(os.Stderr, "warning: could not load .env: %v\n", err)
-	}
-
 	flag.StringVar(&username, "u", "", "Username to search")
 	flag.StringVar(&username, "username", "", "Username to search")
 
@@ -63,6 +59,10 @@ func main() {
 	}
 
 	screen.Clear()
+
+	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
+		fmt.Fprintf(os.Stderr, "warning: could not load .env: %v\n", err)
+	}
 
 	fmt.Print(config.ASCII)
 	fmt.Println(config.VERSION)
