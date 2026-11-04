@@ -100,6 +100,4 @@ func main() {
 	fmt.Printf(":: %-38s: %s\n", "Completed in", time.Since(startAt).Round(time.Millisecond))
 
 	fmt.Println(config.SEPERATOR)
-
-	os.Exit(0)
 }
