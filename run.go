@@ -42,7 +42,15 @@ func runModules(ctx context.Context, w io.Writer, query string, newModules []fun
 		runs[i] = run
 		go func() {
 			defer close(run.done)
-			run.result, run.err = newModule(&run.out).Search(ctx, query)
+			name := "module"
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					run.err = fmt.Errorf("%s(Search): panic: %v", name, recovered)
+				}
+			}()
+			module := newModule(&run.out)
+			name = module.Name()
+			run.result, run.err = module.Search(ctx, query)
 		}()
 	}
 

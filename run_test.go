@@ -18,6 +18,7 @@ type fakeModule struct {
 	name  string
 	delay time.Duration
 	err   error
+	panic any
 }
 
 func (f fakeModule) Name() string { return f.name }
@@ -25,6 +26,9 @@ func (f fakeModule) Name() string { return f.name }
 func (f fakeModule) Search(ctx context.Context, query string) (*modules.Result, error) {
 	fmt.Fprintf(f.out, "<%s>", f.name)
 	time.Sleep(f.delay)
+	if f.panic != nil {
+		panic(f.panic)
+	}
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -34,6 +38,12 @@ func (f fakeModule) Search(ctx context.Context, query string) (*modules.Result, 
 func fake(name string, delay time.Duration, err error) func(io.Writer) modules.Module {
 	return func(out io.Writer) modules.Module {
 		return fakeModule{out: out, name: name, delay: delay, err: err}
+	}
+}
+
+func panicking(name string, value any) func(io.Writer) modules.Module {
+	return func(out io.Writer) modules.Module {
+		return fakeModule{out: out, name: name, panic: value}
 	}
 }
 
@@ -58,5 +68,20 @@ func TestRunModulesRunsConcurrentlyAndKeepsOrder(t *testing.T) {
 	slow, broken, boom, fast := strings.Index(got, "<slow>"), strings.Index(got, "<broken>"), strings.Index(got, "boom"), strings.Index(got, "<fast>")
 	if slow < 0 || broken < slow || boom < broken || fast < boom {
 		t.Fatalf("output %q is not in module order", got)
+	}
+}
+
+func TestRunModulesRecoversModulePanics(t *testing.T) {
+	var out bytes.Buffer
+	results := runModules(context.Background(), &out, "john", []func(io.Writer) modules.Module{
+		panicking("broken", "boom"),
+		fake("healthy", 0, nil),
+	})
+
+	if len(results) != 1 || results[0].Module != "healthy" {
+		t.Fatalf("results = %+v, want only healthy", results)
+	}
+	if !strings.Contains(out.String(), "broken(Search): panic: boom") {
+		t.Fatalf("output %q does not report the panic", out.String())
 	}
 }
