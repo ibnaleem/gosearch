@@ -61,6 +61,12 @@ If GoSearch finds password hashes, it will attempt to crack them using [Weakpass
 
 If you're not using BreachDirectory, GoSearch will search for breaches on HudsonRock's Cybercrime Intelligence & ProxyNova's Databases, respectively. It will also search common TLDs for any domains associated with a given username. This is done whether BreachDirectory is searched or not.
 
+A full search can take a while. To put an upper limit on it, use the `-t` (or `--timeout`) flag with a duration such as `30s` or `2m`:
+```
+$ gosearch -u [USERNAME] --timeout 2m
+```
+When the time runs out, any source that hasn't finished is stopped and reported as an error. The results from the sources that did finish are still shown.
+
 ## I Don't Have a Username
 If you're uncertain about a person's username, you could try generating some by using [urbanadventurer/username-anarchy](https://github.com/urbanadventurer/username-anarchy). Note that `username-anarchy` can only run in Unix terminals (Mac/Linux)
 ```
