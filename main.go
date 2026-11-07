@@ -84,7 +84,7 @@ func main() {
 		ctx    context.Context
 		cancel context.CancelFunc
 	)
-	
+
 	if timeout > 0 {
 		ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	} else {
