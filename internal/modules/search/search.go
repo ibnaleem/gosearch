@@ -56,6 +56,9 @@ type resource struct {
 // in 8s, while a dead host otherwise holds the whole search for the 30s client timeout
 var probeTimeout = 15 * time.Second
 
+// maxMarkerBytes caps a page read to look for an errorMsg or profilePresence marker
+var maxMarkerBytes int64 = 5 << 20
+
 // maxProbes caps the requests in flight at once across a site or domain sweep
 var maxProbes = 32
 
@@ -63,7 +66,7 @@ var maxProbes = 32
 var dnsLabel = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
 
 func NewSearchClient(out io.Writer, fileWriter *file.FileWriter, noFalsePositive bool) modules.Module {
-	httpClient := config.NewHTTPClient()
+	httpClient := config.NewPublicHTTPClient()
 
 	noRedirectHTTPClient := *httpClient
 	noRedirectHTTPClient.CheckRedirect = func(*http.Request, []*http.Request) error {
@@ -165,11 +168,14 @@ func (sc *searchClient) searchDomain(ctx context.Context, query string) ([]strin
 				return
 			}
 
+			domainCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+			defer cancel()
+
 			// most sites redirect http to https, so try https first and fall
 			// back to http; a domain that doesn't respond is just not found
 			var response *http.Response
 			for _, scheme := range []string{"https", "http"} {
-				request, err := http.NewRequestWithContext(ctx, http.MethodGet, scheme+"://"+domain, nil)
+				request, err := http.NewRequestWithContext(domainCtx, http.MethodGet, scheme+"://"+domain, nil)
 				if err != nil {
 					return
 				}
@@ -275,8 +281,9 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 		foundSites     []string
 		uncertainSites []string
 
-		// sites that were rate-limited, failed server-side or timed out, so
-		// they couldn't be checked; counted so they don't pass as "not found"
+		// sites that were rate-limited, failed server-side, timed out or sent a
+		// body too large to search for a marker, so they couldn't be checked;
+		// counted so they don't pass as "not found"
 		failedProbes int
 
 		slots = make(chan struct{}, maxProbes)
@@ -298,6 +305,16 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 			}
 
 			if site.ErrorType == "unknown" {
+				if !sc.noFalsePositive {
+					mu.Lock()
+					uncertainSites = append(uncertainSites, url)
+					mu.Unlock()
+				}
+
+				return
+			}
+
+			if site.ErrorType == "response_url" && strings.TrimSpace(site.ResponseURL) == "" {
 				if !sc.noFalsePositive {
 					mu.Lock()
 					uncertainSites = append(uncertainSites, url)
@@ -382,7 +399,7 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 
 			var body string
 			if site.ErrorType == "errorMsg" || site.ErrorType == "profilePresence" {
-				raw, err := io.ReadAll(response.Body)
+				raw, err := modules.ReadBody(response.Body, maxMarkerBytes)
 				if err != nil {
 					if ctx.Err() == nil {
 						mu.Lock()
@@ -397,6 +414,15 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 			var found bool
 			switch site.ErrorType {
 			case "status_code":
+				// an unfollowed redirect other than the expected one is often a bot
+				// challenge, so it can't confirm a profile exists
+				if response.StatusCode >= http.StatusMultipleChoices && response.StatusCode != site.ErrorCode {
+					mu.Lock()
+					failedProbes++
+					mu.Unlock()
+					return
+				}
+
 				found = response.StatusCode != site.ErrorCode
 
 			case "errorMsg":
@@ -425,11 +451,15 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 
 	wg.Wait()
 
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+
 	slices.Sort(foundSites)
 	slices.Sort(uncertainSites)
 
 	if failedProbes > 0 {
-		theme.Yellowf("[!] %d site(s) could not be checked (rate limited, server error or timeout)", failedProbes).Fprintln(sc.out)
+		theme.Yellowf("[!] %d site(s) could not be checked (rate limited, redirected, server error or timeout)", failedProbes).Fprintln(sc.out)
 	}
 
 	if len(foundSites) == 0 && len(uncertainSites) == 0 {
@@ -476,7 +506,7 @@ func (sc *searchClient) buildResources(ctx context.Context) (*resource, error) {
 
 	var body []byte
 	if err == nil {
-		body, err = io.ReadAll(response.Body)
+		body, err = modules.ReadBody(response.Body, modules.MaxBodyBytes)
 	} else {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr

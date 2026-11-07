@@ -3,9 +3,11 @@ package file
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestConcurrentWritesDoNotInterleave(t *testing.T) {
@@ -45,5 +47,91 @@ func TestConcurrentWritesDoNotInterleave(t *testing.T) {
 		if len(line) != 256*1024 || strings.Trim(line, line[:1]) != "" {
 			t.Fatalf("line %d is a mix of chunks", i)
 		}
+	}
+}
+
+func TestWriteCreatesPrivateDirAndFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permission bits are not enforced on Windows")
+	}
+
+	dir := filepath.Join(t.TempDir(), "results")
+	fw := NewFileWriter(dir)
+	if err := fw.Write("john", "x"); err != nil {
+		t.Fatal(err)
+	}
+
+	dirInfo, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := dirInfo.Mode().Perm(); got != 0700 {
+		t.Errorf("dir mode = %o, want 700", got)
+	}
+
+	files, _ := filepath.Glob(filepath.Join(dir, "john_*.txt"))
+	if len(files) != 1 {
+		t.Fatalf("want 1 output file, got %v", files)
+	}
+	fileInfo, err := os.Stat(files[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fileInfo.Mode().Perm(); got != 0600 {
+		t.Errorf("file mode = %o, want 600", got)
+	}
+}
+
+func TestWriteRefusesPreplantedSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(t.TempDir(), "target.txt")
+	if err := os.WriteFile(target, []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	fw := NewFileWriter(dir)
+	name := "john_" + fw.createdAt.Format("2006-01-02_15-04-05") + ".txt"
+	if err := os.Symlink(target, filepath.Join(dir, name)); err != nil {
+		t.Skipf("cannot create symlink: %v", err)
+	}
+
+	if err := fw.Write("john", "secret"); err == nil {
+		t.Error("Write succeeded through a pre-planted symlink")
+	}
+
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "original" {
+		t.Errorf("symlink target modified: %q", got)
+	}
+}
+
+func TestWriteBoundsLongUsernameFilename(t *testing.T) {
+	dir := t.TempDir()
+	fw := NewFileWriter(dir)
+	// the leading byte puts the 100-byte cut inside a two-byte rune
+	username := "a" + strings.Repeat("ü", 200)
+
+	if err := fw.Write(username, "result"); err != nil {
+		t.Fatal(err)
+	}
+
+	files, err := filepath.Glob(filepath.Join(dir, "*.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("want one output file, got %v", files)
+	}
+
+	base := filepath.Base(files[0])
+	prefix := strings.TrimSuffix(base, "_"+fw.createdAt.Format("2006-01-02_15-04-05")+".txt")
+	if len(prefix) > maxUsernameFilenameBytes {
+		t.Fatalf("username portion is %d bytes, want at most %d", len(prefix), maxUsernameFilenameBytes)
+	}
+	if !utf8.ValidString(prefix) {
+		t.Fatalf("username portion %q splits a UTF-8 rune", prefix)
 	}
 }

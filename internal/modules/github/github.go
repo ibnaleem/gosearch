@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +16,10 @@ import (
 	"github.com/ibnaleem/gosearch/internal/modules"
 	"github.com/ibnaleem/gosearch/internal/theme"
 )
+
+// maxDrainBytes bounds how much of an unread response body is discarded to keep
+// its connection alive; anything longer just costs the connection
+const maxDrainBytes = 64 << 10
 
 type gitHubClient struct {
 	fileWriter *file.FileWriter
@@ -285,6 +290,9 @@ func (ghc *gitHubClient) buildUserRequest(ctx context.Context, query string) (*g
 	endpoint := fmt.Sprintf("https://api.github.com/users/%s", url.PathEscape(query))
 
 	response, err := modules.FetchJSON[gitHubUserResponse](ctx, ghc.httpClient, endpoint, ghc.headers())
+	if errors.Is(err, modules.ErrNotFound) {
+		return &gitHubUserResponse{}, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%s(buildUserRequest): %w", ghc.Name(), err)
 	}
@@ -506,7 +514,7 @@ func (ghc *gitHubClient) buildMutualFollowersRequest(ctx context.Context, query 
 
 	for _, follower := range param {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return mutualFollowers, err
 		}
 
 		endpoint := fmt.Sprintf("https://api.github.com/users/%s/following/%s", url.PathEscape(query), url.PathEscape(follower.Login))
@@ -525,9 +533,11 @@ func (ghc *gitHubClient) buildMutualFollowersRequest(ctx context.Context, query 
 
 		response, err := ghc.httpClient.Do(request)
 		if err != nil {
-			return nil, fmt.Errorf("%s(buildMutualFollowersRequest): send request: %w", ghc.Name(), err)
+			return mutualFollowers, fmt.Errorf("%s(buildMutualFollowersRequest): send request: %w", ghc.Name(), err)
 		}
 
+		// read the small 404 body to EOF so the next check reuses this connection
+		io.Copy(io.Discard, io.LimitReader(response.Body, maxDrainBytes))
 		response.Body.Close()
 
 		switch response.StatusCode {

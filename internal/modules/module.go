@@ -3,12 +3,35 @@ package modules
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 
 	"github.com/ibnaleem/gosearch/internal/config"
 )
+
+// ErrNotFound is returned by FetchJSON on HTTP 404. Callers decide whether a
+// 404 means a missing record or a real failure for their endpoint.
+var ErrNotFound = errors.New("not found (HTTP 404)")
+
+// MaxBodyBytes caps an API response read into memory
+const MaxBodyBytes = 10 << 20
+
+// ReadBody reads all of r and errors if it holds more than limit bytes, so a
+// hostile or broken server can't make the process buffer an unbounded body.
+func ReadBody(r io.Reader, limit int64) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+
+	if int64(len(body)) > limit {
+		return nil, fmt.Errorf("body exceeds %d bytes", limit)
+	}
+
+	return body, nil
+}
 
 type Module interface {
 	Name() string
@@ -44,14 +67,17 @@ func FetchJSON[T any](ctx context.Context, httpClient *http.Client, endpoint str
 	defer response.Body.Close()
 
 	switch status := response.StatusCode; {
+	case status == http.StatusNotFound:
+		return nil, ErrNotFound
+
 	case status == http.StatusTooManyRequests || status == http.StatusForbidden:
 		return nil, fmt.Errorf("rate limit exceeded or access denied (HTTP %d)", status)
 
-	case status >= 400 && status != http.StatusNotFound:
+	case status >= 400:
 		return nil, fmt.Errorf("unexpected status %d", status)
 	}
 
-	body, err := io.ReadAll(response.Body)
+	body, err := ReadBody(response.Body, MaxBodyBytes)
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
