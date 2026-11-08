@@ -62,6 +62,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	if timeout < 0 {
+		fmt.Fprintln(os.Stderr, "Usage: -t/--timeout must not be negative")
+		fmt.Fprintln(os.Stderr, "For help: gosearch -h")
+		fmt.Fprintln(os.Stderr, "Issues: https://github.com/ibnaleem/gosearch/issues")
+		os.Exit(1)
+	}
+
 	screen.Clear()
 
 	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
