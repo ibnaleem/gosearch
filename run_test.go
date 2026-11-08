@@ -19,19 +19,28 @@ type fakeModule struct {
 	delay time.Duration
 	err   error
 	panic any
+	block bool
 }
 
 func (f fakeModule) Name() string { return f.name }
 
 func (f fakeModule) Search(ctx context.Context, query string) (*modules.Result, error) {
 	fmt.Fprintf(f.out, "<%s>", f.name)
+	if f.block {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+
 	time.Sleep(f.delay)
+
 	if f.panic != nil {
 		panic(f.panic)
 	}
+
 	if f.err != nil {
 		return nil, f.err
 	}
+
 	return &modules.Result{Module: f.name, Summary: "ok"}, nil
 }
 
@@ -83,5 +92,34 @@ func TestRunModulesRecoversModulePanics(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "broken(Search): panic: boom") {
 		t.Fatalf("output %q does not report the panic", out.String())
+	}
+}
+
+func blocking(name string) func(io.Writer) modules.Module {
+	return func(out io.Writer) modules.Module {
+		return fakeModule{out: out, name: name, block: true}
+	}
+}
+
+func TestRunModulesStopsAtDeadlineAndKeepsFinishedResults(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	var out bytes.Buffer
+	start := time.Now()
+	results := runModules(ctx, &out, "john", []func(io.Writer) modules.Module{
+		blocking("slow"),
+		fake("fast", 0, nil),
+	})
+	elapsed := time.Since(start)
+
+	if elapsed > time.Second {
+		t.Fatalf("took %v; the slow module must stop at the deadline", elapsed)
+	}
+	if len(results) != 1 || results[0].Module != "fast" {
+		t.Fatalf("results = %+v, want only fast", results)
+	}
+	if !strings.Contains(out.String(), "[x] context deadline exceeded") {
+		t.Fatalf("output %q does not report the deadline", out.String())
 	}
 }
