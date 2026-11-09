@@ -85,35 +85,53 @@ func (lc *leakcheckClient) Search(ctx context.Context, query string) (*modules.R
 
 	if lc.apiKey == "" {
 		theme.Yellow("[!] No LEAKCHECK_API_KEY set; defaulting to the free LeakCheck public API.").Fprintln(lc.out)
-		return lc.searchPublic(ctx, query)
 	}
 
-	return lc.searchPro(ctx, query)
+	total, err := lc.lookup(ctx, query, query)
+	if err != nil {
+		return nil, err
+	}
+
+	return &modules.Result{
+		Module:  lc.Name(),
+		Summary: fmt.Sprintf("%d leak(s) found", total),
+	}, nil
 }
 
-func (lc *leakcheckClient) searchPublic(ctx context.Context, query string) (*modules.Result, error) {
-	theme.Cyan("[*] Searching ", query, " on LeakCheck (public API) for any leaks...").Fprintln(lc.out)
+// lookup searches one term and files its output under fileKey, so every term in
+// a run (the username and the emails derived from it) lands in one report file.
+// It returns the number of leaks found. Pro when a key is set, public otherwise.
+func (lc *leakcheckClient) lookup(ctx context.Context, term, fileKey string) (int, error) {
+	if lc.apiKey != "" {
+		return lc.searchPro(ctx, term, fileKey)
+	}
 
-	endpoint := "https://leakcheck.io/api/public?check=" + url.QueryEscape(query)
+	return lc.searchPublic(ctx, term, fileKey)
+}
+
+func (lc *leakcheckClient) searchPublic(ctx context.Context, term, fileKey string) (int, error) {
+	theme.Cyan("[*] Searching ", term, " on LeakCheck (public API) for any leaks...").Fprintln(lc.out)
+
+	endpoint := "https://leakcheck.io/api/public?check=" + url.QueryEscape(term)
 
 	response, err := modules.FetchJSON[publicResponse](ctx, lc.httpClient, endpoint, nil)
 	if err != nil {
 		if errors.Is(err, modules.ErrNotFound) {
-			theme.Redf("[-] No leaks found for %s.", query).Fprintln(lc.out)
-			return nil, nil
+			theme.Redf("[-] No leaks found for %s.", term).Fprintln(lc.out)
+			return 0, nil
 		}
-		return nil, fmt.Errorf("%s(searchPublic): %w", lc.Name(), err)
+		return 0, fmt.Errorf("%s(searchPublic): %w", lc.Name(), err)
 	}
 
 	if !response.Success || response.Found == 0 {
-		theme.Redf("[-] No leaks found for %s.", query).Fprintln(lc.out)
-		return nil, nil
+		theme.Redf("[-] No leaks found for %s.", term).Fprintln(lc.out)
+		return 0, nil
 	}
 
 	var buffer strings.Builder
 
-	theme.Greenf("[+] Found %d leak(s) for %s:", response.Found, query).Fprintln(lc.out)
-	fmt.Fprintf(&buffer, "[+] Found %d leak(s) for %s:\n", response.Found, query)
+	theme.Greenf("[+] Found %d leak(s) for %s:", response.Found, term).Fprintln(lc.out)
+	fmt.Fprintf(&buffer, "[+] Found %d leak(s) for %s:\n", response.Found, term)
 
 	if len(response.Fields) > 0 {
 		exposed := strings.Join(response.Fields, ", ")
@@ -123,51 +141,48 @@ func (lc *leakcheckClient) searchPublic(ctx context.Context, query string) (*mod
 
 	for index, source := range response.Sources {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, ctxErr
+			return 0, ctxErr
 		}
 
 		theme.Greenf(":: %03d :: %-9s %s (%s)", index+1, "Source:", source.Name, source.Date).Fprintln(lc.out)
 		fmt.Fprintf(&buffer, ":: %03d :: %-9s %s (%s)\n", index+1, "Source:", source.Name, source.Date)
 	}
 
-	if err := lc.fileWriter.Write(query, buffer.String()); err != nil {
+	if err := lc.fileWriter.Write(fileKey, buffer.String()); err != nil {
 		theme.Redf("[!] Could not write output file: %v", err).Fprintln(lc.out)
 	}
 
-	return &modules.Result{
-		Module:  lc.Name(),
-		Summary: fmt.Sprintf("%d leak(s) found", response.Found),
-	}, nil
+	return response.Found, nil
 }
 
-func (lc *leakcheckClient) searchPro(ctx context.Context, query string) (*modules.Result, error) {
-	theme.Cyan("[*] Searching ", query, " on LeakCheck (Pro API) for any leaks...").Fprintln(lc.out)
+func (lc *leakcheckClient) searchPro(ctx context.Context, term, fileKey string) (int, error) {
+	theme.Cyan("[*] Searching ", term, " on LeakCheck (Pro API) for any leaks...").Fprintln(lc.out)
 
-	endpoint := "https://leakcheck.io/api/v2/query/" + url.PathEscape(query) + "?limit=100"
+	endpoint := "https://leakcheck.io/api/v2/query/" + url.PathEscape(term) + "?limit=100"
 	headers := map[string]string{"X-API-Key": lc.apiKey}
 
 	response, err := modules.FetchJSON[proResponse](ctx, lc.httpClient, endpoint, headers)
 	if err != nil {
 		if errors.Is(err, modules.ErrNotFound) {
-			theme.Redf("[-] No leaks found for %s.", query).Fprintln(lc.out)
-			return nil, nil
+			theme.Redf("[-] No leaks found for %s.", term).Fprintln(lc.out)
+			return 0, nil
 		}
-		return nil, fmt.Errorf("%s(searchPro): %w", lc.Name(), err)
+		return 0, fmt.Errorf("%s(searchPro): %w", lc.Name(), err)
 	}
 
 	if !response.Success || response.Found == 0 {
-		theme.Redf("[-] No leaks found for %s.", query).Fprintln(lc.out)
-		return nil, nil
+		theme.Redf("[-] No leaks found for %s.", term).Fprintln(lc.out)
+		return 0, nil
 	}
 
 	var buffer strings.Builder
 
-	theme.Greenf("[+] Found %d leak(s) for %s:", response.Found, query).Fprintln(lc.out)
-	fmt.Fprintf(&buffer, "[+] Found %d leak(s) for %s:\n", response.Found, query)
+	theme.Greenf("[+] Found %d leak(s) for %s:", response.Found, term).Fprintln(lc.out)
+	fmt.Fprintf(&buffer, "[+] Found %d leak(s) for %s:\n", response.Found, term)
 
 	for index, row := range response.Result {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, ctxErr
+			return 0, ctxErr
 		}
 
 		password := row.Password
@@ -183,14 +198,11 @@ func (lc *leakcheckClient) searchPro(ctx context.Context, query string) (*module
 		lc.writeProRow(&buffer, index+1, row, password)
 	}
 
-	if err := lc.fileWriter.Write(query, buffer.String()); err != nil {
+	if err := lc.fileWriter.Write(fileKey, buffer.String()); err != nil {
 		theme.Redf("[!] Could not write output file: %v", err).Fprintln(lc.out)
 	}
 
-	return &modules.Result{
-		Module:  lc.Name(),
-		Summary: fmt.Sprintf("%d leak(s) found", response.Found),
-	}, nil
+	return response.Found, nil
 }
 
 func (lc *leakcheckClient) writeProRow(buffer *strings.Builder, n int, row proRow, password string) {
