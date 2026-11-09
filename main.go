@@ -31,6 +31,7 @@ var (
 	username              string
 	outputPath            string
 	breachDirectoryAPIKey string
+	timeout               time.Duration
 	noFalsePositive       bool
 )
 
@@ -44,6 +45,9 @@ func init() {
 	flag.StringVar(&breachDirectoryAPIKey, "bd", "", "Search Breach Directory with an API Key")
 	flag.StringVar(&breachDirectoryAPIKey, "breach-directory", "", "Search Breach Directory with an API Key")
 
+	flag.DurationVar(&timeout, "t", 0, "Overall search timeout (e.g. 30s or 2m; default: no timeout)")
+	flag.DurationVar(&timeout, "timeout", 0, "Overall search timeout (e.g. 30s or 2m; default: no timeout)")
+
 	flag.BoolVar(&noFalsePositive, "nfp", false, "Do not show false positives")
 	flag.BoolVar(&noFalsePositive, "no-false-positives", false, "Do not show false positives")
 }
@@ -53,6 +57,13 @@ func main() {
 
 	if username == "" {
 		fmt.Fprintln(os.Stderr, "Usage: gosearch -u <username>")
+		fmt.Fprintln(os.Stderr, "For help: gosearch -h")
+		fmt.Fprintln(os.Stderr, "Issues: https://github.com/ibnaleem/gosearch/issues")
+		os.Exit(1)
+	}
+
+	if timeout < 0 {
+		fmt.Fprintln(os.Stderr, "Usage: -t/--timeout must not be negative")
 		fmt.Fprintln(os.Stderr, "For help: gosearch -h")
 		fmt.Fprintln(os.Stderr, "Issues: https://github.com/ibnaleem/gosearch/issues")
 		os.Exit(1)
@@ -76,9 +87,22 @@ func main() {
 	fileWriter := file.NewFileWriter(outputPath)
 	hashCracker := weakpass.NewHashCracker()
 
+	var (
+		ctx    context.Context
+		cancel context.CancelFunc
+	)
+
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	} else {
+		ctx, cancel = context.WithCancel(context.Background())
+	}
+
+	defer cancel()
+
 	startAt := time.Now()
 
-	results := runModules(context.Background(), os.Stdout, username, []func(io.Writer) modules.Module{
+	results := runModules(ctx, os.Stdout, username, []func(io.Writer) modules.Module{
 		func(w io.Writer) modules.Module { return gravatar.NewGravatarClient(w, fileWriter) },
 		func(w io.Writer) modules.Module { return hudsonrock.NewHudsonRockClient(w, fileWriter) },
 		func(w io.Writer) modules.Module { return keybase.NewKeyBaseClient(w, fileWriter) },
