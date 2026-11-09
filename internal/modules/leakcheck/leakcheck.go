@@ -15,10 +15,17 @@ import (
 	"github.com/ibnaleem/gosearch/internal/theme"
 )
 
+// hashCracker turns a password hash into plaintext. main.go passes in a
+// weakpass.HashCracker, so this module doesn't depend on Weakpass directly.
+type hashCracker interface {
+	CrackHash(ctx context.Context, hash string) (string, error)
+}
+
 type leakcheckClient struct {
 	fileWriter *file.FileWriter
 	out        io.Writer
 	httpClient *http.Client
+	cracker    hashCracker
 	apiKey     string
 }
 
@@ -36,11 +43,33 @@ type publicSource struct {
 	Date string `json:"date"`
 }
 
-func NewLeakcheckClient(out io.Writer, fileWriter *file.FileWriter, apiKey string) modules.Module {
+// proResponse is the Pro API v2 shape: full breach records, one row per hit.
+type proResponse struct {
+	Success bool     `json:"success"`
+	Found   int      `json:"found"`
+	Quota   int      `json:"quota"`
+	Result  []proRow `json:"result"`
+}
+
+type proRow struct {
+	Email    string    `json:"email"`
+	Username string    `json:"username"`
+	Password string    `json:"password"`
+	Fields   []string  `json:"fields"`
+	Source   proSource `json:"source"`
+}
+
+type proSource struct {
+	Name       string `json:"name"`
+	BreachDate string `json:"breach_date"`
+}
+
+func NewLeakcheckClient(out io.Writer, fileWriter *file.FileWriter, cracker hashCracker, apiKey string) modules.Module {
 	return &leakcheckClient{
 		fileWriter: fileWriter,
 		out:        out,
 		httpClient: config.NewHTTPClient(),
+		cracker:    cracker,
 		apiKey:     apiKey,
 	}
 }
@@ -54,7 +83,12 @@ func (lc *leakcheckClient) Search(ctx context.Context, query string) (*modules.R
 		return nil, errors.New("empty search query")
 	}
 
-	return lc.searchPublic(ctx, query)
+	if lc.apiKey == "" {
+		theme.Yellow("[!] No LEAKCHECK_API_KEY set; defaulting to the free LeakCheck public API.").Fprintln(lc.out)
+		return lc.searchPublic(ctx, query)
+	}
+
+	return lc.searchPro(ctx, query)
 }
 
 func (lc *leakcheckClient) searchPublic(ctx context.Context, query string) (*modules.Result, error) {
@@ -104,4 +138,103 @@ func (lc *leakcheckClient) searchPublic(ctx context.Context, query string) (*mod
 		Module:  lc.Name(),
 		Summary: fmt.Sprintf("%d leak(s) found", response.Found),
 	}, nil
+}
+
+func (lc *leakcheckClient) searchPro(ctx context.Context, query string) (*modules.Result, error) {
+	theme.Cyan("[*] Searching ", query, " on LeakCheck (Pro API) for any leaks...").Fprintln(lc.out)
+
+	endpoint := "https://leakcheck.io/api/v2/query/" + url.PathEscape(query) + "?limit=100"
+	headers := map[string]string{"X-API-Key": lc.apiKey}
+
+	response, err := modules.FetchJSON[proResponse](ctx, lc.httpClient, endpoint, headers)
+	if err != nil {
+		if errors.Is(err, modules.ErrNotFound) {
+			theme.Redf("[-] No leaks found for %s.", query).Fprintln(lc.out)
+			return nil, nil
+		}
+		return nil, fmt.Errorf("%s(searchPro): %w", lc.Name(), err)
+	}
+
+	if !response.Success || response.Found == 0 {
+		theme.Redf("[-] No leaks found for %s.", query).Fprintln(lc.out)
+		return nil, nil
+	}
+
+	var buffer strings.Builder
+
+	theme.Greenf("[+] Found %d leak(s) for %s:", response.Found, query).Fprintln(lc.out)
+	fmt.Fprintf(&buffer, "[+] Found %d leak(s) for %s:\n", response.Found, query)
+
+	for index, row := range response.Result {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+
+		password := row.Password
+		if looksHashed(password) {
+			cracked, err := lc.cracker.CrackHash(ctx, password)
+			if err != nil {
+				theme.Yellowf("[!] Could not crack hash: %v", err).Fprintln(lc.out)
+			} else if cracked != "" {
+				password = cracked
+			}
+		}
+
+		lc.writeProRow(&buffer, index+1, row, password)
+	}
+
+	if err := lc.fileWriter.Write(query, buffer.String()); err != nil {
+		theme.Redf("[!] Could not write output file: %v", err).Fprintln(lc.out)
+	}
+
+	return &modules.Result{
+		Module:  lc.Name(),
+		Summary: fmt.Sprintf("%d leak(s) found", response.Found),
+	}, nil
+}
+
+func (lc *leakcheckClient) writeProRow(buffer *strings.Builder, n int, row proRow, password string) {
+	source := row.Source.Name
+	if row.Source.BreachDate != "" {
+		source = fmt.Sprintf("%s (%s)", row.Source.Name, row.Source.BreachDate)
+	}
+
+	theme.Greenf(":: %03d :: %-9s %s", n, "Source:", source).Fprintln(lc.out)
+	fmt.Fprintf(buffer, ":: %03d :: %-9s %s\n", n, "Source:", source)
+
+	line := func(label, value string) {
+		if value == "" {
+			return
+		}
+		theme.Greenf("          %-9s %s", label, value).Fprintln(lc.out)
+		fmt.Fprintf(buffer, "          %-9s %s\n", label, value)
+	}
+
+	line("Email:", row.Email)
+	line("Username:", row.Username)
+	line("Password:", password)
+	if len(row.Fields) > 0 {
+		line("Fields:", strings.Join(row.Fields, ", "))
+	}
+}
+
+// looksHashed reports whether s is a password hash rather than plaintext, so we
+// only spend a crack attempt on values that could be one: a bcrypt/crypt string
+// ($2a$, $1$, ...) or an even-length hex digest (md5/sha1/sha256).
+func looksHashed(s string) bool {
+	if strings.HasPrefix(s, "$") {
+		return true
+	}
+
+	if len(s) < 32 || len(s)%2 != 0 {
+		return false
+	}
+
+	for _, r := range s {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", r) {
+			return false
+		}
+	}
+
+	return true
 }
