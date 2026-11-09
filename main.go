@@ -20,6 +20,7 @@ import (
 	"github.com/ibnaleem/gosearch/internal/modules/gravatar"
 	"github.com/ibnaleem/gosearch/internal/modules/hudsonrock"
 	"github.com/ibnaleem/gosearch/internal/modules/keybase"
+	"github.com/ibnaleem/gosearch/internal/modules/leakcheck"
 	"github.com/ibnaleem/gosearch/internal/modules/proxynova"
 	"github.com/ibnaleem/gosearch/internal/modules/search"
 	"github.com/ibnaleem/gosearch/internal/modules/weakpass"
@@ -86,6 +87,7 @@ func main() {
 
 	fileWriter := file.NewFileWriter(outputPath)
 	hashCracker := weakpass.NewHashCracker()
+	leakcheckAPIKey := os.Getenv("LEAKCHECK_API_KEY")
 
 	var (
 		ctx    context.Context
@@ -110,6 +112,9 @@ func main() {
 		func(w io.Writer) modules.Module { return github.NewGitHubClient(w, fileWriter) },
 		func(w io.Writer) modules.Module {
 			return breachdirectory.NewBreachDirectoryClient(w, fileWriter, hashCracker, breachDirectoryAPIKey)
+		},
+		func(w io.Writer) modules.Module {
+			return leakcheck.NewLeakcheckClient(w, fileWriter, hashCracker, leakcheckAPIKey)
 		},
 		func(w io.Writer) modules.Module { return search.NewSearchClient(w, fileWriter, noFalsePositive) },
 	})
