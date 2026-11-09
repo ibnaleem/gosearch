@@ -92,6 +92,27 @@ func (lc *leakcheckClient) Search(ctx context.Context, query string) (*modules.R
 		return nil, err
 	}
 
+	emails := commonEmails(query)
+
+	fmt.Fprintln(lc.out, config.SEPERATOR)
+	theme.Cyan("[*] Generated common email addresses for ", query, ":").Fprintln(lc.out)
+	for _, email := range emails {
+		theme.Greenf(":: %s", email).Fprintln(lc.out)
+	}
+
+	for _, email := range emails {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+
+		found, err := lc.lookup(ctx, email, query)
+		if err != nil {
+			return nil, err
+		}
+
+		total += found
+	}
+
 	return &modules.Result{
 		Module:  lc.Name(),
 		Summary: fmt.Sprintf("%d leak(s) found", total),
