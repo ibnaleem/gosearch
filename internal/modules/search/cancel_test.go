@@ -101,6 +101,10 @@ func TestBuildResourcesReturnsNoSitesWhenContextDone(t *testing.T) {
 	if strings.Contains(out.String(), "local copy") {
 		t.Fatalf("output = %q, a done context must not fall back to the local data.json", out.String())
 	}
+	if !strings.Contains(out.String(), "Site search skipped") {
+		t.Fatalf("output = %q, want a skipped site search notice", out.String())
+	}
+
 }
 
 func TestSearchSiteSkipsEmptySiteList(t *testing.T) {

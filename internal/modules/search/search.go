@@ -574,11 +574,13 @@ func (sc *searchClient) buildResources(ctx context.Context) (*resource, error) {
 	if err == nil {
 		body, err = modules.ReadBody(response.Body, modules.MaxBodyBytes)
 		if err != nil && ctx.Err() != nil {
+			theme.Yellowf("[!] Site search skipped, the search ended before the site list was loaded").Fprintln(sc.out)
 			return &resource{}, nil
 		}
 
 	} else {
 		if ctxErr := ctx.Err(); ctxErr != nil {
+			theme.Yellowf("[!] Site search skipped, the search ended before the site list was loaded").Fprintln(sc.out)
 			return &resource{}, nil
 		}
 
