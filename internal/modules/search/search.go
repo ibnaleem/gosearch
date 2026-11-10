@@ -484,6 +484,10 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 	slices.Sort(foundSites)
 	slices.Sort(uncertainSites)
 
+	if failedProbes > 0 {
+		theme.Yellowf("[!] %d site(s) could not be checked (rate limited, redirected, server error or timeout)", failedProbes).Fprintln(sc.out)
+	}
+
 	if err := ctx.Err(); errors.Is(err, context.Canceled) {
 		theme.Yellowf("[!] Site search interrupted, showing results found so far").Fprintln(sc.out)
 
@@ -522,10 +526,6 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 		}
 
 		return foundSites, uncertainSites, nil
-	}
-
-	if failedProbes > 0 {
-		theme.Yellowf("[!] %d site(s) could not be checked (rate limited, redirected, server error or timeout)", failedProbes).Fprintln(sc.out)
 	}
 
 	if len(foundSites) == 0 && len(uncertainSites) == 0 {
@@ -573,6 +573,10 @@ func (sc *searchClient) buildResources(ctx context.Context) (*resource, error) {
 	var body []byte
 	if err == nil {
 		body, err = modules.ReadBody(response.Body, modules.MaxBodyBytes)
+		if err != nil && ctx.Err() != nil {
+			return &resource{}, nil
+		}
+
 	} else {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return &resource{}, nil
