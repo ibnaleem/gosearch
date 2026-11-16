@@ -225,34 +225,15 @@ func (sc *searchClient) searchDomain(ctx context.Context, query string) ([]strin
 
 	slices.Sort(foundDomains)
 
-	if err := ctx.Err(); errors.Is(err, context.Canceled) {
-		theme.Yellowf("[!] Domain search interrupted, showing results found so far").Fprintln(sc.out)
-
-		if len(foundDomains) > 0 {
-			theme.Greenf("[+] Found %d domains with the query %s", len(foundDomains), query).Fprintln(sc.out)
-			for index, domain := range foundDomains {
-				theme.Greenf(":: %03d :: %s", index+1, domain).Fprintln(sc.out)
-			}
-		}
-
-		return foundDomains, nil
-	}
-
-	if err := ctx.Err(); errors.Is(err, context.DeadlineExceeded) {
-		theme.Yellowf("[!] Domain search timed out, showing results found so far").Fprintln(sc.out)
-
-		if len(foundDomains) > 0 {
-			theme.Greenf("[+] Found %d domains with the query %s", len(foundDomains), query).Fprintln(sc.out)
-			for index, domain := range foundDomains {
-				theme.Greenf(":: %03d :: %s", index+1, domain).Fprintln(sc.out)
-			}
-		}
-
-		return foundDomains, nil
+	stopped := ctx.Err()
+	if stopped != nil {
+		theme.Yellowf("[!] Domain search %s, showing results found so far", stopReason(stopped)).Fprintln(sc.out)
 	}
 
 	if len(foundDomains) == 0 {
-		theme.Redf("[-] No domains found with the query %s", query).Fprintln(sc.out)
+		if stopped == nil {
+			theme.Redf("[-] No domains found with the query %s", query).Fprintln(sc.out)
+		}
 		return nil, nil
 	}
 
@@ -263,6 +244,13 @@ func (sc *searchClient) searchDomain(ctx context.Context, query string) ([]strin
 	}
 
 	return foundDomains, nil
+}
+
+func stopReason(err error) string {
+	if errors.Is(err, context.Canceled) {
+		return "interrupted"
+	}
+	return "timed out"
 }
 
 func (sc *searchClient) buildDomains(field string) ([]string, error) {
@@ -488,48 +476,15 @@ func (sc *searchClient) searchSite(ctx context.Context, query string, sites []we
 		theme.Yellowf("[!] %d site(s) could not be checked (rate limited, redirected, server error or timeout)", failedProbes).Fprintln(sc.out)
 	}
 
-	if err := ctx.Err(); errors.Is(err, context.Canceled) {
-		theme.Yellowf("[!] Site search interrupted, showing results found so far").Fprintln(sc.out)
-
-		if len(foundSites) > 0 {
-			theme.Greenf("[+] Found %d sites with the query %s", len(foundSites), query).Fprintln(sc.out)
-			for index, site := range foundSites {
-				theme.Greenf(":: %03d :: %s", index+1, site).Fprintln(sc.out)
-			}
-		}
-
-		if len(uncertainSites) > 0 {
-			theme.Yellowf("[?] %d unverified sites for the query %s (manual check required)", len(uncertainSites), query).Fprintln(sc.out)
-			for index, site := range uncertainSites {
-				theme.Yellowf(":: %03d :: %s", index+1, site).Fprintln(sc.out)
-			}
-		}
-
-		return foundSites, uncertainSites, nil
-	}
-
-	if err := ctx.Err(); errors.Is(err, context.DeadlineExceeded) {
-		theme.Yellowf("[!] Site search timed out, showing results found so far").Fprintln(sc.out)
-
-		if len(foundSites) > 0 {
-			theme.Greenf("[+] Found %d sites with the query %s", len(foundSites), query).Fprintln(sc.out)
-			for index, site := range foundSites {
-				theme.Greenf(":: %03d :: %s", index+1, site).Fprintln(sc.out)
-			}
-		}
-
-		if len(uncertainSites) > 0 {
-			theme.Yellowf("[?] %d unverified sites for the query %s (manual check required)", len(uncertainSites), query).Fprintln(sc.out)
-			for index, site := range uncertainSites {
-				theme.Yellowf(":: %03d :: %s", index+1, site).Fprintln(sc.out)
-			}
-		}
-
-		return foundSites, uncertainSites, nil
+	stopped := ctx.Err()
+	if stopped != nil {
+		theme.Yellowf("[!] Site search %s, showing results found so far", stopReason(stopped)).Fprintln(sc.out)
 	}
 
 	if len(foundSites) == 0 && len(uncertainSites) == 0 {
-		theme.Redf("[-] No sites found with the query %s", query).Fprintln(sc.out)
+		if stopped == nil {
+			theme.Redf("[-] No sites found with the query %s", query).Fprintln(sc.out)
+		}
 		return nil, nil, nil
 	}
 
