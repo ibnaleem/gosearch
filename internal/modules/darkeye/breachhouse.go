@@ -58,7 +58,7 @@ func (dec *darkEyeClient) searchBreachHouse(ctx context.Context, p probe) (looku
 		return found, fmt.Errorf("%s(searchBreachHouse): response reports failure", dec.Name())
 	}
 
-	if len(response.Error) > 0 {
+	if holdsError(response.Error) {
 		return found, fmt.Errorf("%s(searchBreachHouse): response holds an error", dec.Name())
 	}
 
@@ -163,6 +163,13 @@ func containsAddress(haystack, address string) bool {
 	return false
 }
 
+// localPartRunes are the symbols an unquoted local part can hold (RFC 5322
+// atext and "."), plus "@". One of them before a match means it is the tail of
+// a longer address: "bob@gmail.com" is not in "o'bob@gmail.com". "/" and "="
+// are left out, because they usually end a URL path or query key, not an
+// address.
+const localPartRunes = ".@!#$%&'*+-?^`{|}~"
+
 // addressStartsAt reports whether the text before a match leaves it standing
 // alone, rather than being the tail of a longer local part.
 func addressStartsAt(before string) bool {
@@ -171,7 +178,7 @@ func addressStartsAt(before string) bool {
 		return true
 	}
 
-	return !isWordRune(last) && !strings.ContainsRune(".+%@-", last)
+	return !isWordRune(last) && !strings.ContainsRune(localPartRunes, last)
 }
 
 // addressEndsAt is the same check for the text after a match: it must not run

@@ -113,6 +113,16 @@ func TestSearchHaveIBeenRansomEmptyListIsNoRecords(t *testing.T) {
 	}
 }
 
+func TestSearchHaveIBeenRansomAcceptsNullError(t *testing.T) {
+	api := newFakeAPI(t)
+	api.hibr = respond(http.StatusOK, `{"success":true,"error":null,"sources":[{"id_source":"1","post_title":"Acme"}],"has_next":false}`)
+
+	found, err := searchHIBR(t, api, "username", "bob")
+	if err != nil || len(found.records) != 1 {
+		t.Fatalf("got %+v, %v, want one record and no error", found, err)
+	}
+}
+
 func TestSearchHaveIBeenRansomRejectsBadShapes(t *testing.T) {
 	tests := map[string]string{
 		"no listing key":        `{"has_next":false}`,
@@ -122,6 +132,7 @@ func TestSearchHaveIBeenRansomRejectsBadShapes(t *testing.T) {
 		"item not an object":    `{"sources":["x"],"has_next":false}`,
 		"success false":         `{"success":false,"sources":[],"has_next":false}`,
 		"error key":             `{"error":"nope","sources":[],"has_next":false}`,
+		"error object":          `{"error":{"code":1},"sources":[],"has_next":false}`,
 		"listing without a key": `{"sources":[{"country":"US"}],"has_next":false}`,
 		"not an object":         `[]`,
 		"not json":              `nope`,
@@ -136,6 +147,27 @@ func TestSearchHaveIBeenRansomRejectsBadShapes(t *testing.T) {
 				t.Errorf("body %s accepted, want an error", body)
 			}
 		})
+	}
+}
+
+func TestSearchHaveIBeenRansomDropsAPageWithABadListing(t *testing.T) {
+	api := newFakeAPI(t)
+	api.hibr = func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/2") {
+			respond(http.StatusOK, `{"sources":[{"id_source":"2","post_title":"Second"},{"country":"US"}],"has_next":false}`)(w, r)
+			return
+		}
+
+		respond(http.StatusOK, `{"sources":[{"id_source":"1","post_title":"First"}],"has_next":true}`)(w, r)
+	}
+
+	found, err := searchHIBR(t, api, "username", "bob")
+	if err == nil {
+		t.Fatal("want an error from the bad listing")
+	}
+
+	if len(found.records) != 1 || found.records[0].ID != "1" {
+		t.Errorf("got %+v, want only the first page's record", found.records)
 	}
 }
 

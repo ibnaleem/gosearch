@@ -25,6 +25,9 @@ func TestMentions(t *testing.T) {
 		{"word character before", "xbob@gmail.com", false},
 		{"plus tag before", "a+bob@gmail.com", false},
 		{"other address before", "x@bob@gmail.com", false},
+		{"apostrophe before", "o'bob@gmail.com", false},
+		{"other local part symbol before", "a!bob@gmail.com", false},
+		{"after a URL path", "https://example.com/bob@gmail.com", true},
 		{"longer domain after", "bob@gmail.com.au", false},
 		{"longer domain label after", "bob@gmail.community", false},
 		{"hyphen after", "bob@gmail.com-x", false},
@@ -129,6 +132,16 @@ func TestSearchBreachHouseMarksTruncation(t *testing.T) {
 				t.Error("not marked truncated")
 			}
 		})
+	}
+}
+
+func TestSearchBreachHouseAcceptsNullError(t *testing.T) {
+	api := newFakeAPI(t)
+	api.bh = respond(http.StatusOK, `{"success":true,"error":null,"ransomware":[{"id":"1","post_title":"bob@gmail.com"}],"breaches":[],"leads":[],"stealers":[]}`)
+
+	found, err := searchBH(t, api, "bob@gmail.com")
+	if err != nil || len(found.records) != 1 {
+		t.Fatalf("got %+v, %v, want one record and no error", found, err)
 	}
 }
 

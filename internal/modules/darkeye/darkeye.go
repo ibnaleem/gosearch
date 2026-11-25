@@ -182,7 +182,9 @@ func (dec *darkEyeClient) Search(ctx context.Context, query string) (*modules.Re
 // run looks every probe up in one product and files its output under fileKey,
 // so every term in a run lands in one report file. It stops at the first
 // failure, because a rejected key or a rate limit fails every request after
-// it too, and returns the number of records found before that.
+// it too, and returns the number of records found before that. Records a
+// failed lookup had already read (earlier pages) are still printed and
+// filed, marked as incomplete.
 func (dec *darkEyeClient) run(ctx context.Context, product, fileKey string, probes []probe, search func(context.Context, probe) (lookup, error)) (int, error) {
 	total := 0
 
@@ -197,6 +199,7 @@ func (dec *darkEyeClient) run(ctx context.Context, product, fileKey string, prob
 		found, err := search(ctx, p)
 		if err != nil {
 			theme.Redf("[!] %s lookup failed for %s: %v", product, p.term, err).Fprintln(dec.out)
+			total += dec.report(product, fileKey, p, found, true)
 			return total, err
 		}
 
@@ -208,28 +211,43 @@ func (dec *darkEyeClient) run(ctx context.Context, product, fileKey string, prob
 			continue
 		}
 
-		var buffer strings.Builder
-
-		theme.Greenf("[+] Found %d %s record(s) for %s:", len(found.records), product, p.term).Fprintln(dec.out)
-		fmt.Fprintf(&buffer, "[+] Found %d %s record(s) for %s:\n", len(found.records), product, p.term)
-
-		for index, rec := range found.records {
-			dec.writeRecord(&buffer, index+1, rec)
-		}
-
-		if found.truncated {
-			theme.Yellowf("[!] %s has more records for %s than are shown here.", product, p.term).Fprintln(dec.out)
-			fmt.Fprintf(&buffer, "[!] %s has more records for %s than are shown here.\n", product, p.term)
-		}
-
-		if err := dec.fileWriter.Write(fileKey, buffer.String()); err != nil {
-			theme.Redf("[!] Could not write output file: %v", err).Fprintln(dec.out)
-		}
-
-		total += len(found.records)
+		total += dec.report(product, fileKey, p, found, false)
 	}
 
 	return total, nil
+}
+
+// report prints and files the records one lookup found and returns how many
+// there were. failed marks a lookup that stopped partway, so its records are
+// not taken for the full answer.
+func (dec *darkEyeClient) report(product, fileKey string, p probe, found lookup, failed bool) int {
+	if len(found.records) == 0 {
+		return 0
+	}
+
+	var buffer strings.Builder
+
+	theme.Greenf("[+] Found %d %s record(s) for %s:", len(found.records), product, p.term).Fprintln(dec.out)
+	fmt.Fprintf(&buffer, "[+] Found %d %s record(s) for %s:\n", len(found.records), product, p.term)
+
+	for index, rec := range found.records {
+		dec.writeRecord(&buffer, index+1, rec)
+	}
+
+	switch {
+	case failed:
+		theme.Yellowf("[!] The %s lookup for %s failed partway, so these records are incomplete.", product, p.term).Fprintln(dec.out)
+		fmt.Fprintf(&buffer, "[!] The %s lookup for %s failed partway, so these records are incomplete.\n", product, p.term)
+	case found.truncated:
+		theme.Yellowf("[!] %s has more records for %s than are shown here.", product, p.term).Fprintln(dec.out)
+		fmt.Fprintf(&buffer, "[!] %s has more records for %s than are shown here.\n", product, p.term)
+	}
+
+	if err := dec.fileWriter.Write(fileKey, buffer.String()); err != nil {
+		theme.Redf("[!] Could not write output file: %v", err).Fprintln(dec.out)
+	}
+
+	return len(found.records)
 }
 
 // bearer is the Authorization header both APIs expect.

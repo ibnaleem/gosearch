@@ -1,6 +1,7 @@
 package darkeye
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -61,6 +62,10 @@ func (dec *darkEyeClient) searchHaveIBeenRansom(ctx context.Context, p probe) (l
 			return found, fmt.Errorf("%s(searchHaveIBeenRansom): %w", dec.Name(), err)
 		}
 
+		// a page's records are kept only once the whole page checks out, so
+		// a bad listing doesn't leave half a page behind
+		var records []record
+
 		for _, item := range items {
 			category := hibrCategories[clean(string(item.LeakType))]
 			if category == "" {
@@ -83,8 +88,10 @@ func (dec *darkEyeClient) searchHaveIBeenRansom(ctx context.Context, p probe) (l
 			}
 
 			seen[key] = true
-			found.records = append(found.records, rec)
+			records = append(records, rec)
 		}
+
+		found.records = append(found.records, records...)
 
 		if !hasNext {
 			return found, nil
@@ -96,13 +103,20 @@ func (dec *darkEyeClient) searchHaveIBeenRansom(ctx context.Context, p probe) (l
 	return found, nil
 }
 
+// holdsError reports whether a response's "error" field is set. A missing
+// field and "error": null both mean no error.
+func holdsError(raw json.RawMessage) bool {
+	value := bytes.TrimSpace(raw)
+	return len(value) > 0 && !bytes.Equal(value, []byte("null"))
+}
+
 // page checks the response shape and returns its listings and has_next.
 func (hr *hibrResponse) page() ([]listing, bool, error) {
 	if hr.Success != nil && !*hr.Success {
 		return nil, false, errors.New("response reports failure")
 	}
 
-	if len(hr.Error) > 0 {
+	if holdsError(hr.Error) {
 		return nil, false, errors.New("response holds an error")
 	}
 

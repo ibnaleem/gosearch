@@ -1,6 +1,7 @@
 package darkeye
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -16,20 +17,27 @@ const maxTextRunes = 256
 
 // text is a JSON value read as printable text. A string or a number is kept
 // and anything else (null, bool, object, array) becomes empty, so one odd
-// field doesn't fail a whole response.
+// field doesn't fail a whole response. The kind is read from the first byte,
+// so a number is kept as written (even one too big for a float64) and an
+// object or array is skipped without decoding what is inside it.
 type text string
 
 func (t *text) UnmarshalJSON(data []byte) error {
-	var value any
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
+	value := bytes.TrimSpace(data)
+	if len(value) == 0 {
+		*t = ""
+		return nil
 	}
 
-	switch typed := value.(type) {
-	case string:
-		*t = text(typed)
-	case float64:
-		*t = text(strings.TrimSpace(string(data)))
+	switch first := value[0]; {
+	case first == '"':
+		var s string
+		if err := json.Unmarshal(value, &s); err != nil {
+			return err
+		}
+		*t = text(s)
+	case first == '-' || (first >= '0' && first <= '9'):
+		*t = text(value)
 	default:
 		*t = ""
 	}

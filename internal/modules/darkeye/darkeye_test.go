@@ -328,7 +328,13 @@ func TestSearchRequestsAreBoundedAndAuthenticated(t *testing.T) {
 		}
 	}
 
-	for _, request := range api.sent("bh") {
+	// one request per email
+	bh := api.sent("bh")
+	if want := 5; len(bh) != want {
+		t.Fatalf("Breach House got %d request(s), want %d", len(bh), want)
+	}
+
+	for _, request := range bh {
 		if request.auth != "Bearer "+testBHKey {
 			t.Errorf("Breach House request %q sent Authorization %q", request.uri, request.auth)
 		}
@@ -436,6 +442,40 @@ func TestSearchOneProductFailingKeepsTheOthersResults(t *testing.T) {
 
 	if !strings.Contains(out.String(), "Breach House lookup failed") {
 		t.Errorf("failure not reported:\n%s", out)
+	}
+}
+
+func TestSearchKeepsRecordsFromPagesReadBeforeAFailure(t *testing.T) {
+	api := newFakeAPI(t)
+	api.hibr = func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/2") {
+			respond(http.StatusInternalServerError, `{}`)(w, r)
+			return
+		}
+
+		respond(http.StatusOK, `{"sources":[{"id_source":"x","post_title":"Acme"}],"has_next":true}`)(w, r)
+	}
+	dec, out, dir := newTestClient(t, api, testHIBRKey, "")
+
+	result, err := dec.Search(context.Background(), "bob")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil || !strings.Contains(result.Summary, "1 record(s) found, 1 of 1 product(s) failed") {
+		t.Fatalf("result = %+v, want the first page's record and a failed product", result)
+	}
+
+	printed := colourCodes.ReplaceAllString(out.String(), "")
+	for _, want := range []string{"HaveIBeenRansom lookup failed for bob", "Found 1 HaveIBeenRansom record(s) for bob", "failed partway, so these records are incomplete"} {
+		if !strings.Contains(printed, want) {
+			t.Errorf("output lacks %q:\n%s", want, printed)
+		}
+	}
+
+	saved := savedOutput(t, dir)
+	if !strings.Contains(saved, "Acme") || !strings.Contains(saved, "incomplete") {
+		t.Errorf("partial records not filed as incomplete:\n%s", saved)
 	}
 }
 

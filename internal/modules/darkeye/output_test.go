@@ -33,8 +33,8 @@ func TestClean(t *testing.T) {
 
 func TestCleanCapsLength(t *testing.T) {
 	got := clean(strings.Repeat("é", maxTextRunes+50))
-	if n := len([]rune(got)); n != maxTextRunes {
-		t.Errorf("clean kept %d runes, want %d", n, maxTextRunes)
+	if want := strings.Repeat("é", maxTextRunes); got != want {
+		t.Errorf("clean kept %d runes (%q), want %d whole runes", len([]rune(got)), got, maxTextRunes)
 	}
 }
 
@@ -53,6 +53,24 @@ func TestTextUnmarshal(t *testing.T) {
 
 	if got.A != "x" || got.B != "42" || got.C != "" || got.D != "" || got.E != "" {
 		t.Errorf("got %+v, want a=x b=42 and the rest empty", got)
+	}
+}
+
+func TestTextUnmarshalKeepsNumbersAsWritten(t *testing.T) {
+	var got struct {
+		A text `json:"a"`
+		B text `json:"b"`
+		C text `json:"c"`
+		D text `json:"d"`
+	}
+
+	body := `{"a":1e1000,"b":{"value":1e1000},"c":[1e1000],"d":-12.50}`
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got.A != "1e1000" || got.B != "" || got.C != "" || got.D != "-12.50" {
+		t.Errorf("got %+v, want a=1e1000 d=-12.50 and the rest empty", got)
 	}
 }
 
