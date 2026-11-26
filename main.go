@@ -16,6 +16,7 @@ import (
 	"github.com/ibnaleem/gosearch/internal/file"
 	"github.com/ibnaleem/gosearch/internal/modules"
 	"github.com/ibnaleem/gosearch/internal/modules/breachdirectory"
+	"github.com/ibnaleem/gosearch/internal/modules/darkeye"
 	"github.com/ibnaleem/gosearch/internal/modules/github"
 	"github.com/ibnaleem/gosearch/internal/modules/gravatar"
 	"github.com/ibnaleem/gosearch/internal/modules/hudsonrock"
@@ -88,6 +89,8 @@ func main() {
 	fileWriter := file.NewFileWriter(outputPath)
 	hashCracker := weakpass.NewHashCracker()
 	leakcheckAPIKey := os.Getenv("LEAKCHECK_API_KEY")
+	darkEyeHIBRAPIKey := os.Getenv("DARKEYE_HIBR_API_KEY")
+	darkEyeBreachHouseAPIKey := os.Getenv("DARKEYE_BREACHHOUSE_API_KEY")
 
 	var (
 		ctx    context.Context
@@ -115,6 +118,9 @@ func main() {
 		},
 		func(w io.Writer) modules.Module {
 			return leakcheck.NewLeakcheckClient(w, fileWriter, hashCracker, leakcheckAPIKey)
+		},
+		func(w io.Writer) modules.Module {
+			return darkeye.NewDarkEyeClient(w, fileWriter, darkEyeHIBRAPIKey, darkEyeBreachHouseAPIKey)
 		},
 		func(w io.Writer) modules.Module { return search.NewSearchClient(w, fileWriter, noFalsePositive) },
 	})
